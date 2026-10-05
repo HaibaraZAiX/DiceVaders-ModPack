@@ -30,7 +30,7 @@ namespace DiceVaders.ExtraRewardOption
     /// 同时要在运行前把面板上的 ArtifactViews 从 3 个克隆成 4 个 ——
     /// 否则第 2 个循环访问 index 3 会抛 ArgumentOutOfRange。
     /// </summary>
-    [BepInPlugin(Guid, "DiceVaders Extra Reward Option", "1.0.0")]
+    [BepInPlugin(Guid, "DiceVaders Extra Reward Option", "1.3.0")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicevaders.extrareward";

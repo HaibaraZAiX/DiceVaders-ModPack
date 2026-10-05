@@ -39,7 +39,7 @@ namespace DiceVaders.ConstellationTool
     /// v2.8 全量审查后整理：合并 Update 里重复的初始化块、缓存查找结果、文字校正改为缓存组件引用、
     ///      规范化不再硬编码兜底值、清掉历次改向留下的死代码。
     /// </summary>
-    [BepInPlugin(Guid, "DiceVaders Constellation Tool", "3.1.0")]
+    [BepInPlugin(Guid, "DiceVaders Constellation Tool", "3.4.0")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicevaders.constellationtool";
@@ -121,7 +121,7 @@ namespace DiceVaders.ConstellationTool
             ModToggleRegistry.ConstellationReroll = Enabled;
             ModToggleRegistry.Log = m => Logger.LogInfo(m);
 
-            Logger.LogInfo("===== Constellation Tool v3.2.0 (刷新全部 + 每张卡片独立刷新) =====");
+            Logger.LogInfo("===== Constellation Tool v3.4.0 (刷新全部 + 每张卡片独立刷新) =====");
 
             ClassInjector.RegisterTypeInIl2Cpp<ConstellationUI>();
             var go = new GameObject("DiceVaders_ConstellationTool");
@@ -296,7 +296,9 @@ namespace DiceVaders.ConstellationTool
                 try { showing = ConstellationController.IsShowing; } catch { }
             }
 
-            if (!inScene && _wasInScene) { _restoreAt = -1f; _verifyAt = -1f; _rerollCount = 0; _modelSnapshot = -1; }
+            // ★ v3.4：_trimAt 也要一起复位 —— 否则上一局排下的延迟裁剪会打到下一局的数据上
+            //   （cc 已换，旧时刻仍会到期触发）。
+            if (!inScene && _wasInScene) { _restoreAt = -1f; _verifyAt = -1f; _trimAt = -1f; _rerollCount = 0; _modelSnapshot = -1; }
             _wasInScene = inScene;
 
             // 每次重新打开星座界面做一次初始化。
@@ -1611,7 +1613,27 @@ namespace DiceVaders.ConstellationTool
                 if (list == null) { Log("补详情：列表 null"); return; }
 
                 // 先规范化数据长度，再装配 UI。
-                TrimModelConstellations(cc);
+                //
+                // ★ v3.4 修复（与界面打开路径同源的崩溃，这条是漏网的第二处）：
+                //   裁剪**不能在过渡中做** —— UpdateConstellationView（RVA 0x1CEDD60）的循环是
+                //   「异步本地化回调链」驱动的：
+                //       LocalizationUtils.LocalizeAndProcess(name, callback) → callback 里 i++ 后索引
+                //   索引存在闭包里跨帧递增，中途改列表长度就会 ArgumentOutOfRange。
+                //
+                //   本方法由重掷路径在 RestoreDelay（默认 0.65s）后调用，而 CreateConstellations
+                //   触发的 UpdateConstellationView 可能还没跑完 —— 日志实证 IsShowing 与
+                //   IsTransitioning 会同时为真。所以这里加过渡守卫，顺延到过渡结束再裁。
+                bool transitioning = false;
+                try { transitioning = cc.IsTransitioning; } catch { }
+                if (transitioning)
+                {
+                    _trimAt = Time.realtimeSinceStartup + 1.0f;
+                    Log("  正在过渡中，裁剪推迟到过渡结束");
+                }
+                else
+                {
+                    TrimModelConstellations(cc);
+                }
 
                 for (int i = 0; i < list.Count; i++)
                 {
