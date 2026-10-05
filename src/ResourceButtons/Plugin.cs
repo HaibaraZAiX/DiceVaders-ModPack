@@ -48,7 +48,9 @@ namespace DiceVaders.ResourceButtons
         public override void Load()
         {
             Logger = Log;
-            ModKitLog.Sink = m => Logger.LogInfo(m);
+            ModKitLog.Sink      = m => Logger.LogInfo(m);
+            ModKitLog.WarnSink  = m => Logger.LogWarning(m);
+            ModKitLog.ErrorSink = m => Logger.LogError(m);
 
             Enabled = Config.Bind("1-开关", "Enabled", true,
                 "开启无限资源。也可以在游戏的「沙盒设置」面板里切换。");
@@ -108,6 +110,10 @@ namespace DiceVaders.ResourceButtons
             float now = Time.realtimeSinceStartup;
             if (now < _nextPoll) return;
             _nextPoll = now + (Plugin.PollSeconds != null ? Plugin.PollSeconds.Value : 0.05f);
+
+            // ★ 换局收尾（查找缓存失效 + LogOnce 去重表复位）—— 统一走 ModKit，
+            //   不在这里自己维护指针字段。Idempotent，每轮调一次即可。
+            Il2CppHelpers.PollRunChange();
 
             var ec = Il2CppHelpers.FindCached<StarVaders.EncounterController>(0.5f);
             if (ec == null) { _lastState = ""; return; }

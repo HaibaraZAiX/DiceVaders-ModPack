@@ -36,8 +36,6 @@ namespace DiceVaders.ExtraRewardOption
         public const string Guid = "dicevaders.extrareward";
 
         internal static ManualLogSource Logger;
-        internal static ConfigEntry<bool> Enabled;
-        internal static ConfigEntry<int> OptionCount;
         internal static ConfigEntry<bool> TestHotkeyEnabled;
         internal static ConfigEntry<string> TestKey;
         internal static ConfigEntry<bool> AutoOpenOnRunStart;
@@ -48,12 +46,6 @@ namespace DiceVaders.ExtraRewardOption
             Logger = Log;
             ModKitLog.Sink = m => Logger.LogInfo(m);
 
-            Enabled = Config.Bind("1-开关", "Enabled", true,
-                "把幕奖励（专长选择）的选项数量从 3 增加到 4。\n" +
-                "★ 想保持三选一的话把它关掉 —— 关掉只停用数量补丁，不影响下面的「开局自动弹出」。");
-            OptionCount = Config.Bind("1-开关", "OptionCount", 3,
-                new ConfigDescription("目标选项数量。原版是 3。填 3 = 不改。", new AcceptableValueRange<int>(3, 6)));
-
             // ★★ 用户要的核心功能：开局自动弹出「三选一专长」面板 ★★
             //   走的完全是游戏自己的流程：
             //     SpecialRewardPanel.CreateNewDraft()   建候选 + 铺界面
@@ -61,8 +53,12 @@ namespace DiceVaders.ExtraRewardOption
             //         → CreateLegendaryArtifactTask(选中的名字)   真正发放
             //         → StartTurnTask / LevelUpStarterArtifactTask
             //   （反编译 OnPressArtifactSelect 实证，RVA 0x1D21370）
+            //
+            // ★ v1.3.1：原来的「选项数 3→4」配置项已整体移除，理由见文件末尾注释 ——
+            //   那个机制在 IL2CPP 下从未生效过，且用户要求保持三选一。
             AutoOpenOnRunStart = Config.Bind("2-开局自动弹出", "AutoOpenOnRunStart", true,
-                "开局自动弹出专长三选一面板（不用打幕、也不用按热键）。");
+                "开局自动弹出专长三选一面板（不用打幕、也不用按热键）。\n" +
+                "★ 其中前两个选项固定是当前指挥官的专属专长（需已解锁）。");
             AutoOpenDelay = Config.Bind("2-开局自动弹出", "AutoOpenDelay", 6f,
                 new ConfigDescription("开新局后等多少秒再弹。\n" +
                     "★ 别设太小：开局有一长串初始化 task 在跑。",
@@ -74,20 +70,14 @@ namespace DiceVaders.ExtraRewardOption
                 "触发测试面板的按键。可填 Z / X / C / V / F1~F12。\n" +
                 "★ 游戏占用了 F2（Bug 报告），别填 F2。");
 
-            Logger.LogInfo("===== DiceVaders ExtraRewardOption v1.3.0 =====");
+            Logger.LogInfo("===== DiceVaders ExtraRewardOption v1.3.1 =====");
 
-            try
-            {
-                var harmony = new Harmony("dicevaders.extrareward");
-                harmony.PatchAll(typeof(RewardOptionPatch));
-                Logger.LogInfo("ExtraReward: Harmony 补丁已挂");
-            }
-            catch (Exception e)
-            {
-                Logger.LogInfo("ExtraReward: 挂补丁失败 " + e.GetType().Name + ": " + e.Message);
-            }
+            // ★ v1.3.1：这里原来挂的是 RewardOptionPatch（选项数 3→4 的 transpiler）。
+            //   该机制在 IL2CPP 下从未生效（理由见文件末尾注释），已整体移除。
+            //   现在这个插件**不挂任何 Harmony 补丁** —— 全部功能靠
+            //   TestHotkeyKeeper 里的 MonoBehaviour 轮询 + 直接改面板数据实现。
 
-            // 测试热键宿主
+            // 热键宿主 / 自动弹出宿主
             try
             {
                 ClassInjector.RegisterTypeInIl2Cpp<TestHotkeyKeeper>();
@@ -95,11 +85,12 @@ namespace DiceVaders.ExtraRewardOption
                 UnityEngine.Object.DontDestroyOnLoad(go);
                 go.hideFlags = HideFlags.HideAndDontSave;
                 go.AddComponent<TestHotkeyKeeper>();
-                Logger.LogInfo("ExtraReward: 测试热键已挂（F8）");
+                string key = (TestKey != null) ? TestKey.Value : "Z";
+                Logger.LogInfo($"ExtraReward: 宿主已挂（手动热键 = {key}）");
             }
             catch (Exception e)
             {
-                Logger.LogInfo("ExtraReward: 挂热键失败 " + e.GetType().Name + ": " + e.Message);
+                Logger.LogError("ExtraReward: 挂宿主失败 " + e.GetType().Name + ": " + e.Message);
             }
         }
     }
@@ -120,14 +111,13 @@ namespace DiceVaders.ExtraRewardOption
 
         private void Update()
         {
-            // 延迟重排（等游戏把 3 个槽排完）
-            if (_relayoutAt > 0f && Time.realtimeSinceStartup >= _relayoutAt)
+            // 面板铺好后把前两个选项换成当前指挥官的专属专长
+            // （必须等游戏 CreateNewDraft 填完 _artifacts 才能改）
+            if (_applyPerksAt > 0f && Time.realtimeSinceStartup >= _applyPerksAt)
             {
-                _relayoutAt = -1f;
-                // ★ 先把前两个选项换成当前指挥官的专属专长（必须在 CreateNewDraft 填完 _artifacts 之后）
+                _applyPerksAt = -1f;
                 try { ForceCommanderPerks(_panel); }
-                catch (Exception e) { Plugin.Logger?.LogInfo("ExtraReward: ForceCommanderPerks 异常 " + e.Message); }
-                Relayout();
+                catch (Exception e) { ModKitLog.Warn("ExtraReward: ForceCommanderPerks 异常 " + e.Message); }
             }
 
             // ★★ 开局自动弹出「专长三选一」面板 ★★
@@ -137,7 +127,7 @@ namespace DiceVaders.ExtraRewardOption
             {
                 var ec = Il2CppHelpers.FindCached<StarVaders.EncounterController>(0.5f);
                 IntPtr cur = IntPtr.Zero;
-                try { if (ec != null) cur = ec.Pointer; } catch { }
+                try { if (ec != null) cur = ec.Pointer; } catch (Exception __e) { LogOnce.Warn("TestHotkeyKeeper.Update:140", __e); }
 
                 if (cur == IntPtr.Zero)
                 {
@@ -154,6 +144,8 @@ namespace DiceVaders.ExtraRewardOption
                     _autoOpened = false;
                     float d = (Plugin.AutoOpenDelay != null) ? Plugin.AutoOpenDelay.Value : 6f;
                     _autoOpenAt = Time.realtimeSinceStartup + d;
+                    // ★ v1.3.1：统一的换局收尾 —— 查找缓存失效 + LogOnce 去重表复位
+                    Il2CppHelpers.OnRunChanged();
                     Plugin.Logger?.LogInfo($"ExtraReward: 检测到新对局，{d:0.0}s 后自动弹出专长三选一");
                 }
                 else if (!_autoOpened && _autoOpenAt > 0f && Time.realtimeSinceStartup >= _autoOpenAt)
@@ -178,7 +170,7 @@ namespace DiceVaders.ExtraRewardOption
                         var pnl = Il2CppHelpers.FindCached<StarVaders.SpecialRewardPanel>(0.5f);
                         if (pnl != null) stillOpen = pnl.IsActive;
                     }
-                    catch { }
+                    catch (Exception __e) { LogOnce.Warn("TestHotkeyKeeper.Update:181", __e); }
 
                     if (stillOpen)
                     {
@@ -209,7 +201,7 @@ namespace DiceVaders.ExtraRewardOption
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (kb != null) pressed = IsKeyPressed(kb, Plugin.TestKey != null ? Plugin.TestKey.Value : "Z");
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("TestHotkeyKeeper.Update:212", __e); }
             if (!pressed) return;
 
             _cooldown = 1.0f;
@@ -304,22 +296,39 @@ namespace DiceVaders.ExtraRewardOption
                 catch (Exception e) { Plugin.Logger?.LogInfo("  ABottomPanel.Show() 失败: " + e.Message); }
 
                 // ── 3) 建选项（CreateNewDraft 是自包含的：自己 new List + ArtifactFactory）──
-                panel.StartCoroutine(panel.CreateNewDraft());
-                Plugin.Logger?.LogInfo("ExtraReward[TEST]: 已启动 CreateNewDraft()");
+                // ★ v1.3.1 修复（审查 M29）：先停掉上一次没跑完的协程。
+                //   自动弹出带重试（最多 6 次），旧实现没有协程引用、也没有在跑检查，
+                //   实测一局连续重建了 5 次候选列表，每次都覆盖 _artifacts。
+                try
+                {
+                    if (_draftCo != null) panel.StopCoroutine(_draftCo);
+                }
+                catch (Exception __e) { LogOnce.Warn("Trigger.StopCoroutine", __e); }
 
-                // ── 4) 记下时间点：稍后重排 4 个槽 ──
+                // 注意类型：CreateNewDraft() 返回 Il2CppSystem.Collections.IEnumerator，
+                // StartCoroutine 返回 UnityEngine.Coroutine —— 两者不能互相赋值。
+                Il2CppSystem.Collections.IEnumerator routine = panel.CreateNewDraft();
+                if (routine == null)
+                {
+                    ModKitLog.Warn("ExtraReward: CreateNewDraft() 返回 null，本次不铺界面");
+                    return;
+                }
+                _draftCo = panel.StartCoroutine(routine);
+                Plugin.Logger?.LogInfo("ExtraReward: 已启动 CreateNewDraft()");
+
+                // ── 4) 记下面板与时间点：等 CreateNewDraft 填完 _artifacts 后再改前两个选项 ──
                 _panel = panel;
-                _relayoutAt = Time.realtimeSinceStartup + 1.2f;
+                _applyPerksAt = Time.realtimeSinceStartup + 1.2f;
             }
             catch (Exception e)
             {
-                Plugin.Logger?.LogInfo("ExtraReward[TEST] 异常: " + e.GetType().Name + ": " + e.Message);
+                ModKitLog.Warn("ExtraReward Trigger 异常: " + e.GetType().Name + ": " + e.Message);
             }
         }
 
         private StarVaders.SpecialRewardPanel _panel;
-        private float _relayoutAt = -1f;
-        private bool _dumpedLayout;
+        private float _applyPerksAt = -1f;
+        private Coroutine _draftCo;
 
         // ★ 开局自动弹出用的状态
         private IntPtr _lastEncounter = IntPtr.Zero;
@@ -328,132 +337,6 @@ namespace DiceVaders.ExtraRewardOption
         private float _recheckAt = -1f;
         private int _autoAttempts = 0;
 
-        /// <summary>
-        /// 等游戏把 3 个槽排好之后，把 4 个槽重新均匀排开。
-        ///
-        /// ★ 为什么需要：反编译 CreateNewDraft 显示游戏是【用代码设置 localPosition】
-        ///   来排这 3 个槽的（Transform::get/set_localPosition_Injected），
-        ///   我克隆出来的第 4 个不在它的排布表里 → 会压在右边的「跳过换钱」按钮上。
-        ///   实测症状：第 3、4 个槽挤在一起，第 4 个叠着绿色的钱图标。
-        ///
-        /// ★ 做法：读前 3 个槽的真实 localPosition 算步长，再以中间槽为中心重排 4 个。
-        /// </summary>
-        private void Relayout()
-        {
-            try
-            {
-                var panel = _panel;
-                if (panel == null) return;
-                var views = panel.ArtifactViews;
-                if (views == null || views.Count < 2) return;
-
-                int n = views.Count;
-
-                // ── 先 dump 真实布局，便于诊断 ──
-                if (!_dumpedLayout)
-                {
-                    _dumpedLayout = true;
-                    for (int i = 0; i < n; i++)
-                    {
-                        try
-                        {
-                            var v = views[i];
-                            if (v == null) { Plugin.Logger?.LogInfo($"ExtraReward[Layout]: [{i}] null"); continue; }
-                            var t = v.transform;
-                            var sc = v.transform.localScale;
-                            Plugin.Logger?.LogInfo(
-                                $"ExtraReward[Layout]: [{i}] '{v.gameObject.name}' " +
-                                $"localPos=({t.localPosition.x:0.#},{t.localPosition.y:0.#},{t.localPosition.z:0.#}) " +
-                                $"scale=({sc.x:0.##},{sc.y:0.##}) active={v.gameObject.activeSelf}");
-                        }
-                        catch (Exception e) { Plugin.Logger?.LogInfo($"ExtraReward[Layout]: [{i}] 读取失败 {e.Message}"); }
-                    }
-                    try
-                    {
-                        var par = views[0].transform.parent;
-                        if (par != null)
-                            Plugin.Logger?.LogInfo($"ExtraReward[Layout]: 父节点 '{par.name}' 子对象数={par.childCount}");
-                    }
-                    catch { }
-                }
-
-                // ── 算步长：优先用 [0]→[1]，退化到 [1]→[2] ──
-                float step = 0f;
-                try
-                {
-                    var a = views[0].transform.localPosition;
-                    var b = views[1].transform.localPosition;
-                    step = b.x - a.x;
-                }
-                catch { }
-                if (Mathf.Abs(step) < 1f)
-                {
-                    try
-                    {
-                        var b = views[1].transform.localPosition;
-                        var c = views[2].transform.localPosition;
-                        step = c.x - b.x;
-                    }
-                    catch { }
-                }
-                if (Mathf.Abs(step) < 1f)
-                {
-                    Plugin.Logger?.LogInfo("ExtraReward[Layout]: 步长算不出来，放弃重排");
-                    return;
-                }
-
-                // ── 以原中间槽为中心重排 n 个 ──
-                float centerX = 0f;
-                try { centerX = views[(n - 1) / 2].transform.localPosition.x; }
-                catch { }
-                float startX = centerX - step * ((n - 1) / 2f);
-                float baseY = 0f, baseZ = 0f;
-                try
-                {
-                    var p0 = views[0].transform.localPosition;
-                    baseY = p0.y; baseZ = p0.z;
-                }
-                catch { }
-
-                for (int i = 0; i < n; i++)
-                {
-                    try
-                    {
-                        var v = views[i];
-                        if (v == null) continue;
-                        v.transform.localPosition = new Vector3(startX + step * i, baseY, baseZ);
-                    }
-                    catch (Exception e) { Plugin.Logger?.LogInfo($"ExtraReward[Layout]: 排第 {i} 个失败 {e.Message}"); }
-                }
-
-                Plugin.Logger?.LogInfo($"ExtraReward[Layout]: 已重排 {n} 个槽，步长 {step:0.#}，起始 x {startX:0.#}");
-
-                // 等比缩放：4 个槽挤在原本 3 个的宽度里，略缩一点更协调
-                try
-                {
-                    var scale = views[0].transform.localScale;
-                    if (n > 3 && scale.x > 0.1f)
-                    {
-                        float shrink = 3f / n;      // 4 个 → 0.75
-                        if (shrink < 1f)
-                        {
-                            var s2 = new Vector3(scale.x * shrink, scale.y * shrink, scale.z);
-                            for (int i = 0; i < n; i++)
-                            {
-                                var v = views[i];
-                                if (v != null) v.transform.localScale = s2;
-                            }
-                            Plugin.Logger?.LogInfo($"ExtraReward[Layout]: 缩放系数 {shrink:0.##}");
-                        }
-                    }
-                }
-                catch { }
-            }
-            catch (Exception e)
-            {
-                Plugin.Logger?.LogInfo("ExtraReward[Layout] 失败: " + e.GetType().Name + ": " + e.Message);
-            }
-        }
 
         /// <summary>
         /// ★ 把「开局三选一」的前两个固定成当前指挥官自带的专属专长。
@@ -484,10 +367,14 @@ namespace DiceVaders.ExtraRewardOption
                 var cur = StarVaders.CharacterSelectionController.CurrentCommander;
                 Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 当前指挥官 = {cur}");
 
-                // ── 0) 先把面板原本给的 3 个候选 dump 出来（关键诊断）──
-                var em = Il2CppHelpers.Safe(() => Il2CppHelpers.FindCached<StarVaders.EncounterController>(0.5f).EncounterModel);
-                StarVaders.ArtifactFactory fac = null;
-                try { if (em != null) fac = em.ArtifactFactory; } catch { }
+                // ── 0) 建一个【临时工厂】用于展示模型 ──
+                // ★ v1.3.1 修复（审查 M27）：不要用本局真实的 ArtifactFactory ——
+                //   CreateArtifactModel 会推进它的 ArtifactID 计数器，而 ArtifactSlots 正按
+                //   Number 索引，每开一次面板最多吃掉 6 个编号。
+                //   游戏自己的 CreateNewDraft 用的就是临时工厂 `new ArtifactFactory(0)`，这里对齐。
+                StarVaders.ArtifactFactory scratch = null;
+                try { scratch = new StarVaders.ArtifactFactory(0); }
+                catch (Exception __e) { LogOnce.Warn("ForceCommanderPerks.scratchFactory", __e); }
 
                 int poolType = -1;
                 for (int i = 0; i < arts.Count; i++)
@@ -496,7 +383,7 @@ namespace DiceVaders.ExtraRewardOption
                     {
                         var nm0 = arts[i];
                         StarVaders.ArtifactModel m0 = null;
-                        if (fac != null) m0 = fac.CreateArtifactModel(nm0);
+                        if (scratch != null) m0 = scratch.CreateArtifactModel(nm0);
                         if (m0 != null)
                         {
                             Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 原候选[{i}] = {nm0}  type={(int)m0.ArtifactType} rarity={(int)m0.Rarity}");
@@ -507,20 +394,22 @@ namespace DiceVaders.ExtraRewardOption
                             Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 原候选[{i}] = {nm0}  (建不出模型)");
                         }
                     }
-                    catch (Exception e0) { Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 原候选[{i}] 读取失败 {e0.Message}"); }
+                    catch (Exception e0) { LogOnce.Warn($"ExtraReward.原候选{i}", e0); }
                 }
                 Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 判定候选池类型 = {poolType}（0=Column 1=Power 2=Starter 3=Token 4=Pilot 5=Removed 6=Constellation）");
 
-                // ── 1) 收集「同类型 + 当前指挥官专属」的 artifact ──
-                //    ★ 上一版只按 CommanderUnique 过滤，结果捞出来的是「神器」（type=0 Column），
-                //      把面板的「专长」挤掉了。这一版强制同类型。
+                // ── 1) 收集「同类型 + 当前指挥官专属 + 不在现有候选里」的 artifact ──
+                //    ★ 只按 CommanderUnique 过滤会把「神器」（type=0 Column）也捞进来，
+                //      把面板的「专长」挤掉 —— 所以强制同类型。
+                //    ★ v1.3.1（审查 M26/M30）：还要排除**已经在候选列表里**的名字，
+                //      否则同一个专长会出现两次（实机日志已复现过）。
                 var uniques = new Il2CppSystem.Collections.Generic.List<StarVaders.ArtifactName>();
                 var anyUnique = new Il2CppSystem.Collections.Generic.List<StarVaders.ArtifactName>();
                 for (int t = 0; t <= 6; t++)
                 {
                     Il2CppSystem.Collections.Generic.List<StarVaders.ArtifactModel> models = null;
                     try { models = StarVaders.ContentGetter.GetAllArtifactsOfType((StarVaders.ArtifactType)t); }
-                    catch { continue; }
+                    catch (Exception __e) { LogOnce.Warn($"GetAllArtifactsOfType[{t}]", __e); continue; }
                     if (models == null) continue;
 
                     for (int i = 0; i < models.Count; i++)
@@ -534,17 +423,22 @@ namespace DiceVaders.ExtraRewardOption
 
                             var nm = m.ArtifactName;
                             if (!anyUnique.Contains(nm)) anyUnique.Add(nm);
-                            if (poolType >= 0 && (int)m.ArtifactType == poolType && !uniques.Contains(nm)) uniques.Add(nm);
+
+                            if (poolType < 0 || (int)m.ArtifactType != poolType) continue;
+                            if (arts.Contains(nm)) continue;          // 已经在候选里 → 不要重复摆
+                            if (uniques.Contains(nm)) continue;
+                            uniques.Add(nm);
                         }
-                        catch { }
+                        catch (Exception __e) { LogOnce.Warn("ForceCommanderPerks.扫描专属", __e); }
                     }
                 }
 
-                Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 指挥官专属 artifact 共 {anyUnique.Count} 个，其中和候选池同类型的 {uniques.Count} 个");
+                Plugin.Logger?.LogInfo($"ExtraReward[Commander]: 指挥官专属 artifact 共 {anyUnique.Count} 个，" +
+                                       $"其中和候选池同类型且未在候选里的 {uniques.Count} 个");
 
                 if (uniques.Count == 0)
                 {
-                    Plugin.Logger?.LogInfo("ExtraReward[Commander]: 同类型里没有专属 artifact，保持原样不动");
+                    Plugin.Logger?.LogInfo("ExtraReward[Commander]: 没有可替换的专属 artifact，保持原样不动");
                     return;
                 }
 
@@ -558,7 +452,7 @@ namespace DiceVaders.ExtraRewardOption
                     try
                     {
                         StarVaders.ArtifactModel built = null;
-                        if (fac != null) built = fac.CreateArtifactModel(nm);
+                        if (scratch != null) built = scratch.CreateArtifactModel(nm);
                         if (built != null && panel.ArtifactViews != null && i < panel.ArtifactViews.Count)
                         {
                             var v = panel.ArtifactViews[i];
@@ -588,157 +482,26 @@ namespace DiceVaders.ExtraRewardOption
         }
     }
 
-    public static class RewardOptionPatch
-    {
-        // ────────────────────────────────────────────────────────────
-        // 1) transpiler：把 MoveNext 里的 ldc.i4.3 换成 ldc.i4.N
-        // ────────────────────────────────────────────────────────────
-        [HarmonyPatch]
-        public static class MoveNextPatch
-        {
-            [HarmonyPrepare]
-            public static bool Prepare()
-            {
-                try
-                {
-                    var t = FindStateMachineType();
-                    if (t == null) { Plugin.Logger?.LogInfo("ExtraReward: 找不到 CreateNewDraft 状态机类型"); return false; }
-                    return true;
-                }
-                catch (Exception e)
-                {
-                    Plugin.Logger?.LogInfo("ExtraReward Prepare 失败: " + e.Message);
-                    return false;
-                }
-            }
 
-            [HarmonyTargetMethod]
-            public static MethodBase TargetMethod()
-            {
-                var t = FindStateMachineType();
-                if (t == null) return null;
-                var m = t.GetMethod("MoveNext", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                Plugin.Logger?.LogInfo($"ExtraReward: 目标 = {t.FullName}.MoveNext  ({(m != null)})");
-                return m;
-            }
-
-            [HarmonyTranspiler]
-            public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-            {
-                int n = 4;
-                if (Plugin.OptionCount != null) n = Plugin.OptionCount.Value;
-                if (n <= 3) return instructions;
-
-                var list = new List<CodeInstruction>(instructions);
-                int replaced = 0;
-
-                for (int i = 0; i < list.Count; i++)
-                {
-                    var op = list[i].opcode;
-                    if (op == OpCodes.Ldc_I4_3)
-                    {
-                        list[i] = new CodeInstruction(OpCodes.Ldc_I4, n);
-                        replaced++;
-                    }
-                    else if (op == OpCodes.Ldc_I4_S && list[i].operand is sbyte sb && sb == 3)
-                    {
-                        list[i] = new CodeInstruction(OpCodes.Ldc_I4, n);
-                        replaced++;
-                    }
-                    else if (op == OpCodes.Ldc_I4 && list[i].operand is int v && v == 3)
-                    {
-                        list[i] = new CodeInstruction(OpCodes.Ldc_I4, n);
-                        replaced++;
-                    }
-                }
-
-                Plugin.Logger?.LogInfo($"ExtraReward[Transpiler]: 把 {replaced} 处常量 3 改成了 {n}");
-                return list;
-            }
-
-            private static Type FindStateMachineType()
-            {
-                try
-                {
-                    var t = typeof(StarVaders.SpecialRewardPanel);
-                    var n = t.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic);
-                    if (n == null) return null;
-                    for (int i = 0; i < n.Length; i++)
-                    {
-                        if (n[i] != null && n[i].Name.Contains("CreateNewDraft")) return n[i];
-                    }
-                }
-                catch { }
-                return null;
-            }
-        }
-
-        // ────────────────────────────────────────────────────────────
-        // 2) 运行前把 ArtifactViews 克隆到 N 个
-        // ────────────────────────────────────────────────────────────
-        [HarmonyPatch(typeof(StarVaders.SpecialRewardPanel), nameof(StarVaders.SpecialRewardPanel.CreateNewDraft))]
-        [HarmonyPrefix]
-        public static void Pre_CreateNewDraft(StarVaders.SpecialRewardPanel __instance)
-        {
-            if (Plugin.Enabled == null || !Plugin.Enabled.Value) return;
-            try { EnsureSlots(__instance); }
-            catch (Exception e) { Plugin.Logger?.LogInfo("ExtraReward EnsureSlots 失败: " + e.Message); }
-        }
-
-        /// <summary>
-        /// 保证 ArtifactViews 至少有 OptionCount 个。
-        /// ★ 方法只接 IL2CPP 类型 —— 注入/补丁类的静态方法没有注册限制，
-        ///   但仍然避免托管类型出现在签名里，保持一致性。
-        /// </summary>
-        private static void EnsureSlots(StarVaders.SpecialRewardPanel panel)
-        {
-            var views = panel.ArtifactViews;
-            if (views == null) { Plugin.Logger?.LogInfo("ExtraReward: ArtifactViews 为 null"); return; }
-
-            int want = (Plugin.OptionCount != null) ? Plugin.OptionCount.Value : 4;
-            int have = views.Count;
-            if (have >= want) return;
-
-            Plugin.Logger?.LogInfo($"ExtraReward: ArtifactViews 现有 {have} 个，需要 {want} 个，开始克隆");
-
-            // 拿最后一个当模板
-            StarVaders.ArtifactView proto = null;
-            try { proto = views[have - 1]; } catch { }
-            if (proto == null) { Plugin.Logger?.LogInfo("ExtraReward: 模板 ArtifactView 为 null"); return; }
-
-            var protoGo = proto.gameObject;
-            var parent = protoGo.transform.parent;
-            if (parent == null) { Plugin.Logger?.LogInfo("ExtraReward: 模板没有父节点"); return; }
-
-            for (int i = have; i < want; i++)
-            {
-                try
-                {
-                    var clone = UnityEngine.Object.Instantiate(protoGo, parent);
-                    if (clone == null) continue;
-                    clone.name = "DV_ExtraRewardSlot_" + i;
-                    clone.SetActive(true);
-
-                    // 位置：按模板的间距往右排（若是 LayoutGroup 会自己接管）
-                    var rt = clone.GetComponent<RectTransform>();
-                    var prt = protoGo.GetComponent<RectTransform>();
-                    if (rt != null && prt != null)
-                    {
-                        float step = (prt.sizeDelta.x > 1f ? prt.sizeDelta.x : 200f) + 20f;
-                        rt.anchoredPosition = prt.anchoredPosition + new Vector2(step * (i - have + 1), 0f);
-                    }
-
-                    var av = clone.GetComponent<StarVaders.ArtifactView>();
-                    if (av == null) { Plugin.Logger?.LogInfo($"ExtraReward: 克隆体上没有 ArtifactView（{i}）"); continue; }
-                    views.Add(av);
-                }
-                catch (Exception e)
-                {
-                    Plugin.Logger?.LogInfo($"ExtraReward 克隆第 {i} 个槽失败: {e.GetType().Name}: {e.Message}");
-                }
-            }
-
-            Plugin.Logger?.LogInfo($"ExtraReward: ArtifactViews 现在 {views.Count} 个");
-        }
-    }
+    // ═══════════════════════════════════════════════════════════════════════
+    // 【已移除】「幕奖励选项数 3 → 4」整套机制
+    //
+    // 原实现有两部分：
+    //   ① HarmonyTranspiler 把 SpecialRewardPanel.<CreateNewDraft>d__30.MoveNext
+    //      里的 ldc.i4.3 替换成 ldc.i4.N
+    //   ② HarmonyPrefix 在 CreateNewDraft 前把 ArtifactViews 克隆到 N 个
+    //
+    // ★ 为什么删掉（代码审查结论 S1）：
+    //   ① **在 IL2CPP 下根本不生效** —— BepInEx 6 对 IL2CPP 程序集走原生 detour，
+    //      Harmony transpiler 只能改写托管 stub（那个 48 字节的
+    //      il2cpp_runtime_invoke thunk），改不到 GameAssembly 里的原生立即数。
+    //      也就是这个功能从来没有真正生效过，实测面板一直只有 3 个选项。
+    //   ② 全量替换 ldc.i4.3 会误伤同一状态机里无关的常量 3。
+    //   ③ 用户明确要求「保持三选一」，这个功能本来也不需要。
+    //
+    // 保留的功能（真正在工作、用户要的）：
+    //   开局自动弹出「专长三选一」面板 + 前两个固定为当前指挥官的专属专长。
+    //   它走游戏自己的 SpecialRewardPanel._artifacts 列表 +
+    //   CreateLegendaryArtifactTask，不依赖任何 transpiler。
+    // ═══════════════════════════════════════════════════════════════════════
 }

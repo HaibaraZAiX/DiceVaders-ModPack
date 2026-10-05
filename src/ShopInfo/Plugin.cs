@@ -1,5 +1,4 @@
 using System;
-using System.Text;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -59,31 +58,38 @@ namespace DiceVaders.ShopInfo
         public override void Load()
         {
             Logger = base.Log;
-            ModKitLog.Sink = m => Logger.LogInfo(m);
+            ModKitLog.Sink      = m => Logger.LogInfo(m);
+            ModKitLog.WarnSink  = m => Logger.LogWarning(m);
+            ModKitLog.ErrorSink = m => Logger.LogError(m);
 
             ShowPanel = Config.Bind("1-显示", "ShowPanel", true, "显示商店出货概率面板。");
             OffsetX = Config.Bind("1-显示", "OffsetX", 520f,
                 new ConfigDescription("左列距屏幕左边缘像素。", new AcceptableValueRange<float>(0f, 900f)));
             RightOffsetX = Config.Bind("1-显示", "RightOffsetX", 560f,
-                new ConfigDescription("右列距屏幕右边缘像素（默认 460，落在「发射！」按钮左边）。",
+                new ConfigDescription("右列距屏幕右边缘像素（默认 560，落在「发射！」按钮左边）。",
                     new AcceptableValueRange<float>(0f, 900f)));
             OffsetY = Config.Bind("1-显示", "OffsetY", 280f,
                 new ConfigDescription("两列距屏幕底部像素。", new AcceptableValueRange<float>(0f, 900f)));
             FontSize = Config.Bind("1-显示", "FontSize", 15f,
                 new ConfigDescription("字号。", new AcceptableValueRange<float>(8f, 40f)));
             ShowArtifactProbs = Config.Bind("1-显示", "ShowArtifactProbs", true,
-                "在右侧显示神器物品的稀有度概率（与左侧商品棋子共用同一套曲线）。");
+                "在右侧显示神器物品的稀有度概率（与左侧商品棋子共用同一套曲线）。\n" +
+                "★ 关掉只影响「神器物品」这一块；下面的「星界」行是独立开关，仍会显示。");
             ShowPoolSummary = Config.Bind("1-显示", "ShowPoolSummary", false,
-                "（保留项）显示「本局神器池」统计。默认关，日志里仍会记录可获得数量。");
+                "【未实现 · 保留项】本局神器池统计。当前代码没有消费这个开关，改它不会有任何效果。");
 
             // ── 隐藏数值：游戏从不在界面上显示、但实际影响战斗的那些 EncounterValue ══
             // 对应差评里骂的 BOSS 机制（兽化 / 怒气 / 蜂群倍率 / 血祭 等）。
             ShowHiddenValues = Config.Bind("1-显示", "ShowHiddenValues", false,
                 "显示隐藏的对局数值（全局倍率 / 怒气 / 兽化回合 / 蜂群倍率 / 献祭% / 增益% / 最终BOSS血量 / 跳过量）。\n" +
                 "★ 只在数值非零时显示，全为零时这一块会整体隐藏，不占地方。");
-            ExtraOffsetY = Config.Bind("1-显示", "HiddenValuesOffsetY", 300f,
-                new ConfigDescription("隐藏数值块距屏幕底部像素（它在左列上方）。",
-                    new AcceptableValueRange<float>(0f, 900f)));            ShowAstral = Config.Bind("1-显示", "ShowAstral", true,
+            ExtraOffsetY = Config.Bind("1-显示", "HiddenValuesOffsetY", 420f,
+                new ConfigDescription(
+                    "隐藏数值块距屏幕底部像素。\n" +
+                    "★ 它是单独一块、pivot 同为 (0,0) 也是向上生长，所以必须**比 OffsetY 大足够多**，" +
+                    "否则会和左列概率块叠字（旧默认 300 / OffsetY 280 就是叠的）。",
+                    new AcceptableValueRange<float>(0f, 1200f)));
+            ShowAstral = Config.Bind("1-显示", "ShowAstral", true,
                 "在右列底部显示「星界」出现概率。\n" +
                 "★ 星界是独立的一次掷骰（在选秀格上判定），不占四档概率之和，所以单独列出。\n" +
                 "   依据：DraftChoice.Initialize 的 astralChance 参数，DraftPanel.CreateNewDraft 传常量 0.02。");
@@ -129,6 +135,12 @@ namespace DiceVaders.ShopInfo
         private TMPro.TextMeshProUGUI _textExtra;   // 隐藏数值（只在非零时显示）
         private float _nextRefresh;
         private int _lastW = int.MinValue;
+
+        // ★ v1.1：布局参数与内容签名的「上次已应用值」缓存 ——
+        //   避免每帧写 anchoredPosition（标脏布局）与每 0.2 秒重建富文本。
+        private float _apX = float.NaN, _apY = float.NaN, _apRX = float.NaN;
+        private float _apEY = float.NaN, _apFS = float.NaN;
+        private string _lastSig;
 
         private void Start() { BuildUI(); }
 
@@ -177,7 +189,7 @@ namespace DiceVaders.ShopInfo
             t.color = new Color(0.88f, 0.94f, 1f, 0.92f);
             t.alignment = anchoredLeft ? TMPro.TextAlignmentOptions.Left : TMPro.TextAlignmentOptions.Right;
             t.richText = true;
-            try { t.enableAutoSizing = false; } catch { }
+            try { t.enableAutoSizing = false; } catch (Exception __e) { LogOnce.Warn("InfoPanel.MakeText:183", __e); }
             t.text = "";
             return t;
         }
@@ -186,37 +198,28 @@ namespace DiceVaders.ShopInfo
         {
             try
             {
+                // ★ 换局收尾（查找缓存失效 + LogOnce 去重表复位）—— 统一走 ModKit。
+                Il2CppHelpers.PollRunChange();
+
                 if (Plugin.ShowPanel != null && !Plugin.ShowPanel.Value)
                 {
                     ClearAll();
                     return;
                 }
 
-                // 位置：左列贴左下角偏移 OffsetX，右列贴右下角偏移 RightOffsetX，两列同高 OffsetY
-                if (_textLeft != null)
+                // ── 布局：只在参数真的变化时才写 ──
+                // ★ v1.1 修复（审查 L6）：旧实现每帧无条件写三个 anchoredPosition
+                //   （每帧标脏布局）并每帧读 9 次 ConfigEntry。参数不变就不该动。
+                float ox = Plugin.OffsetX?.Value ?? 520f;
+                float oy = Plugin.OffsetY?.Value ?? 280f;
+                float rx = Plugin.RightOffsetX?.Value ?? 560f;
+                float ey = Plugin.ExtraOffsetY?.Value ?? 420f;
+                float fs = Plugin.FontSize?.Value ?? 15f;
+
+                if (ox != _apX || oy != _apY || rx != _apRX || ey != _apEY || fs != _apFS)
                 {
-                    var rt = _textLeft.rectTransform;
-                    if (rt != null)
-                        rt.anchoredPosition = new Vector2(Plugin.OffsetX.Value, Plugin.OffsetY.Value);
-                    if (Math.Abs(_textLeft.fontSize - Plugin.FontSize.Value) > 0.01f)
-                        _textLeft.fontSize = Plugin.FontSize.Value;
-                }
-                if (_textRight != null)
-                {
-                    var rt = _textRight.rectTransform;
-                    if (rt != null)
-                        rt.anchoredPosition = new Vector2(-Plugin.RightOffsetX.Value, Plugin.OffsetY.Value);
-                    if (Math.Abs(_textRight.fontSize - Plugin.FontSize.Value) > 0.01f)
-                        _textRight.fontSize = Plugin.FontSize.Value;
-                }
-                // 隐藏数值块：左列上方
-                if (_textExtra != null)
-                {
-                    var rt = _textExtra.rectTransform;
-                    if (rt != null)
-                        rt.anchoredPosition = new Vector2(Plugin.OffsetX.Value, Plugin.ExtraOffsetY.Value);
-                    if (Math.Abs(_textExtra.fontSize - Plugin.FontSize.Value) > 0.01f)
-                        _textExtra.fontSize = Plugin.FontSize.Value;
+                    _apX = ox; _apY = oy; _apRX = rx; _apEY = ey; _apFS = fs;
+                    ApplyLayout(ox, oy, rx, ey, fs);
                 }
 
                 // 每 0.2 秒刷新一次即可（数值不会每帧变）
@@ -224,7 +227,34 @@ namespace DiceVaders.ShopInfo
                 _nextRefresh = Time.realtimeSinceStartup + 0.2f;
                 Refresh();
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("InfoPanel.Update", __e); }
+        }
+
+        /// <summary>把三个文本框摆到配置指定的位置与字号。</summary>
+        private void ApplyLayout(float ox, float oy, float rx, float ey, float fs)
+        {
+            try
+            {
+                if (_textLeft != null)
+                {
+                    var rt = _textLeft.rectTransform;
+                    if (rt != null) rt.anchoredPosition = new Vector2(ox, oy);
+                    if (Math.Abs(_textLeft.fontSize - fs) > 0.01f) _textLeft.fontSize = fs;
+                }
+                if (_textRight != null)
+                {
+                    var rt = _textRight.rectTransform;
+                    if (rt != null) rt.anchoredPosition = new Vector2(-rx, oy);
+                    if (Math.Abs(_textRight.fontSize - fs) > 0.01f) _textRight.fontSize = fs;
+                }
+                if (_textExtra != null)
+                {
+                    var rt = _textExtra.rectTransform;
+                    if (rt != null) rt.anchoredPosition = new Vector2(ox, ey);
+                    if (Math.Abs(_textExtra.fontSize - fs) > 0.01f) _textExtra.fontSize = fs;
+                }
+            }
+            catch (Exception __e) { LogOnce.Warn("InfoPanel.ApplyLayout", __e); }
         }
 
         private void Refresh()
@@ -232,18 +262,38 @@ namespace DiceVaders.ShopInfo
             // ★ 星座界面有自己的按钮（刷新 / 刷新全部），概率列会和它们重叠 —— 那里整块隐藏。
             //   实测截图：右列正好压在「刷新」按钮上。
             bool constellationShowing = false;
-            try { constellationShowing = StarVaders.ConstellationController.IsShowing; } catch { }
+            try { constellationShowing = StarVaders.ConstellationController.IsShowing; }
+            catch (Exception __e) { LogOnce.Warn("InfoPanel.IsShowing", __e); }
             if (constellationShowing) { ClearAll(); return; }
 
             var ec = Il2CppHelpers.FindCached<StarVaders.EncounterController>(0.5f);
             if (ec == null) { ClearAll(); return; }
 
             StarVaders.EncounterModel em = null;
-            try { em = ec.EncounterModel; } catch { }
+            try { em = ec.EncounterModel; } catch (Exception __e) { LogOnce.Warn("InfoPanel.EncounterModel", __e); }
             if (em == null) { ClearAll(); return; }
 
+            // ★ v1.1 修复（审查 M10）：取不到权重基数时**不要拿 0 继续算**。
+            //   旧实现 w 保持 0 照常渲染，会画出一组格式合法但完全错误的概率。
             int w = 0;
-            try { w = em.GetCurrentShopRarity(); } catch { }
+            try { w = em.GetCurrentShopRarity(); }
+            catch (Exception __e)
+            {
+                LogOnce.Warn("InfoPanel.GetCurrentShopRarity", __e);
+                ClearAll();
+                return;
+            }
+
+            bool showArtifact = Plugin.ShowArtifactProbs?.Value ?? true;
+            bool showAstral = Plugin.ShowAstral?.Value ?? true;
+            bool showHidden = Plugin.ShowHiddenValues?.Value ?? false;
+
+            // ★ v1.1 修复（审查 L7）：内容没变就别重建富文本。
+            //   SetText 内部虽然会拦掉真正相同的字符串，但富文本拼接本身每 0.2 秒
+            //   都在分配字符串。隐藏数值块打开时它的内容可能随时变，所以那种情况不跳过。
+            string sig = $"{w}|{showArtifact}|{showAstral}|{showHidden}|{constellationShowing}";
+            if (sig == _lastSig && !showHidden) return;
+            _lastSig = sig;
 
             if (w != _lastW)
             {
@@ -266,46 +316,37 @@ namespace DiceVaders.ShopInfo
             float pLeg = c1;
             float pRare = c2 - c1;
             float pUnc = c3 - c2;
-            float pCom = 1f - c3;
+            float pCom = 1f - c3;   // ★ 已验证：W=635 → 60.5/39.5/0/0，与游戏内实测一致
 
-            // ── 左：商品棋子各稀有度概率（竖排，一行一个）──
-            // 配色取自游戏自己的 ContentGetter.GetRarityHex：
-            //   普通 #767D5A / 罕见 #1ACB68 / 稀有 #CA47BA / 传说 #E58D07 / 星界 #C01E20
-            var leftText =
-                "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" +
+            // 概率四行（左右共用同一套曲线与配色 —— 配色取自 ContentGetter.GetRarityHex）
+            string Rows() =>
                 $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
                 $"<color=#CA47BA>稀有</color> {pRare * 100f:0.0}%\n" +
                 $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
                 $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%";
 
-            // ── 右：神器物品各稀有度概率（同一套曲线）──
-            var rightText =
-                "<size=85%><color=#9FB4C7>神器物品</color></size>\n" +
-                $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
-                $"<color=#CA47BA>稀有</color> {pRare * 100f:0.0}%\n" +
-                $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
-                $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%";
+            // 星界：独立掷骰，不占上面四档之和
+            string astralLine = showAstral
+                ? $"\n<color=#C01E20>星界</color> {ASTRAL_CHANCE * 100f:0.0}%"
+                : "";
 
-            // 星界：独立掷骰，不占上面四档之和，所以单独一行 —— 两列都要显示
-            if (Plugin.ShowAstral != null && Plugin.ShowAstral.Value)
-            {
-                string astralLine = $"\n<color=#C01E20>星界</color> {ASTRAL_CHANCE * 100f:0.0}%";
-                leftText += astralLine;
-                rightText += astralLine;
-            }
+            // ── 左：商品棋子 ──
+            string leftText = "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" + Rows() + astralLine;
+
+            // ── 右：神器物品 ──
+            // ★ v1.1 修复（审查 M9）：关掉 ShowArtifactProbs 时**不再把整列抹空** ——
+            //   旧实现连带把星界行也一起抹掉了，而星界是独立开关控制的。
+            string rightText;
+            if (showArtifact)
+                rightText = "<size=85%><color=#9FB4C7>神器物品</color></size>\n" + Rows() + astralLine;
+            else
+                rightText = astralLine.TrimStart('\n');
 
             SetText(_textLeft, leftText);
-
-            if (Plugin.ShowArtifactProbs != null && Plugin.ShowArtifactProbs.Value)
-                SetText(_textRight, rightText);
-            else
-                SetText(_textRight, "");
+            SetText(_textRight, rightText);
 
             // ── 隐藏数值块（只在非零时才有内容）──
-            if (Plugin.ShowHiddenValues != null && Plugin.ShowHiddenValues.Value)
-                SetText(_textExtra, BuildHiddenValues(em));
-            else
-                SetText(_textExtra, "");
+            SetText(_textExtra, showHidden ? BuildHiddenValues(em) : "");
         }
 
         private void ClearAll()
@@ -371,9 +412,9 @@ namespace DiceVaders.ShopInfo
             try
             {
                 if (t == null) return;
-                if (t.text != s) { t.text = s; try { t.ForceMeshUpdate(); } catch { } }
+                if (t.text != s) { t.text = s; try { t.ForceMeshUpdate(); } catch (Exception __e) { LogOnce.Warn("InfoPanel.SetText.ForceMeshUpdate", __e); } }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("InfoPanel.SetText", __e); }
         }
 
         private static float Clamp01(float v)

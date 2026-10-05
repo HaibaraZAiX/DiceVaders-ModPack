@@ -23,6 +23,8 @@
     <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
     <InteropDir>$(BepInExDir)\interop</InteropDir>
     <CoreDir>$(BepInExDir)\core</CoreDir>
+    <!-- 共享库：日志出口 + LogOnce 去重日志（v1.1 起 QoL 也接进 ModKit 统一日志） -->
+    <ModKitDir>$(MSBuildThisFileDirectory)..\DiceVaders.ModKit\bin\Release</ModKitDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -58,6 +60,9 @@
     </Reference>
     <Reference Include="UnityEngine">
       <HintPath>$(InteropDir)\UnityEngine.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="DiceVaders.ModKit">
+      <HintPath>$(ModKitDir)\DiceVaders.ModKit.dll</HintPath><Private>false</Private>
     </Reference>
   </ItemGroup>
 

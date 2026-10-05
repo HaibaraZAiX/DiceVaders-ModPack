@@ -67,6 +67,9 @@ namespace DiceVaders.ConstellationTool
         public override void Load()
         {
             Logger = base.Log;
+            ModKitLog.Sink      = m => Logger.LogInfo(m);
+            ModKitLog.WarnSink  = m => Logger.LogWarning(m);
+            ModKitLog.ErrorSink = m => Logger.LogError(m);
 
             Enabled = Config.Bind("0-开关", "Enabled", true,
                 "星座刷新功能总开关。也可以在游戏的「沙盒设置」面板里切换。");
@@ -183,8 +186,17 @@ namespace DiceVaders.ConstellationTool
             canvas.sortingOrder = 32000;      // 压到最上层
             canvas.overrideSorting = true;
 
+            // ★ v3.6 修复（审查 M18）：必须挂 GraphicRaycaster。
+            //   没有它，这个 Canvas 下的按钮对 EventSystem **完全不可见** ——
+            //   点击会射线穿透到同位置的游戏 UI 上（目前靠代码里自己轮询
+            //   Mouse.current + RectangleContainsScreenPoint 兜住，但那是纯几何判定，
+            //   和游戏 UI 重叠时会「一次点击打给两个对象」）。
+            //   挂上之后按钮才真正参与 Unity 的事件系统。
+            try { go.AddComponent<GraphicRaycaster>(); }
+            catch (Exception __e) { LogOnce.Warn("EnsureOverlayCanvas.GraphicRaycaster", __e); }
+
             _overlayCanvas = go;
-            Log("  已创建独立 Overlay Canvas (sortingOrder=32000)");
+            Log("  已创建独立 Overlay Canvas (sortingOrder=32000, +GraphicRaycaster)");
             return go;
         }
 
@@ -194,19 +206,15 @@ namespace DiceVaders.ConstellationTool
         }
 
         // ---------- IL2CPP 真实类型名 ----------
+        //
+        // ★ v3.6 修复（审查 M8）：原来这里有一份【私有副本】，与 ModKit 的
+        //   Il2CppHelpers.RealTypeName 逐字相同（含同样的缺陷：失败时返回 "<err:...>"，
+        //   调用方 IsGameType 会判 false → 真实游戏组件被静默漏删）。
+        //   重复实现的问题是两个副本会各自演化，修好一个不代表另一个也好。
+        //   现在统一转调 ModKit 的实现（失败返回 null，调用方按「读不到」处理）。
+        private static string RealTypeName(Component comp) => Il2CppHelpers.RealTypeName(comp);
 
-        private static string RealTypeName(Component comp)
-        {
-            try
-            {
-                var cls = IL2CPP.il2cpp_object_get_class(comp.Pointer);
-                var ns = Marshal.PtrToStringAnsi(IL2CPP.il2cpp_class_get_namespace(cls));
-                var nm = Marshal.PtrToStringAnsi(IL2CPP.il2cpp_class_get_name(cls));
-                if (string.IsNullOrEmpty(nm)) return "<unknown>";
-                return string.IsNullOrEmpty(ns) ? nm : ns + "." + nm;
-            }
-            catch (Exception e) { return "<err:" + e.Message + ">"; }
-        }
+        private static bool IsGameType(string full) => Il2CppHelpers.IsGameType(full);
 
         // ---------- 查找缓存 ----------
         // FindObjectOfType 是每次遍历全场景的昂贵调用，而 Update 每帧都要用它，
@@ -257,7 +265,7 @@ namespace DiceVaders.ConstellationTool
                             if (b != null) b.SetActive(false);
                         }
                     }
-                    catch { }
+                    catch (Exception __e) { LogOnce.Warn("ConstellationUI.Update:263", __e); }
                 }
                 return;
             }
@@ -283,9 +291,12 @@ namespace DiceVaders.ConstellationTool
                     bool hadButtons = (_nativeButton != null) || (_singleButtons.Count > 0);
                     _lastEncounterPtr = curPtr;
                     if (hadButtons) DestroyBuiltButtons("换局");
+                    // ★ v3.5：统一的换局收尾 —— 查找缓存失效 + LogOnce 去重表复位。
+                    //   原来只清了自己的按钮，FindCached 的缓存要等 TTL 自然过期。
+                    if (curPtr != IntPtr.Zero) Il2CppHelpers.OnRunChanged();
                 }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.Update:291", __e); }
 
             // 关键：ConstellationController 在【局内也存在】，不能只看它是否存在，
             // 要用游戏的 IsShowing 标志判断"星座界面是否正在显示"，
@@ -293,7 +304,7 @@ namespace DiceVaders.ConstellationTool
             bool showing = false;
             if (inScene)
             {
-                try { showing = ConstellationController.IsShowing; } catch { }
+                try { showing = ConstellationController.IsShowing; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.Update:299", __e); }
             }
 
             // ★ v3.4：_trimAt 也要一起复位 —— 否则上一局排下的延迟裁剪会打到下一局的数据上
@@ -334,7 +345,7 @@ namespace DiceVaders.ConstellationTool
             {
                 _trimAt = -1f;
                 bool transitioning = false;
-                try { transitioning = cc.IsTransitioning; } catch { }
+                try { transitioning = cc.IsTransitioning; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.Update:340", __e); }
                 if (transitioning)
                 {
                     _trimAt = Time.realtimeSinceStartup + 1.5f;   // 还在过渡，再等等
@@ -352,14 +363,14 @@ namespace DiceVaders.ConstellationTool
                 {
                     if (_nativeButton.activeSelf != showing) _nativeButton.SetActive(showing);
                 }
-                catch { }
+                catch (Exception __e) { LogOnce.Warn("ConstellationUI.Update:358", __e); }
             }
             // 小按钮跟随主按钮显隐
             for (int i = 0; i < _singleButtons.Count; i++)
             {
                 var b = _singleButtons[i];
                 if (b == null) continue;
-                try { if (b.activeSelf != showing) b.SetActive(showing); } catch { }
+                try { if (b.activeSelf != showing) b.SetActive(showing); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.Update:365", __e); }
             }
 
             // 小按钮贴到各自卡片旁边（卡片自由布局，索引顺序 ≠ 视觉顺序）
@@ -470,7 +481,7 @@ namespace DiceVaders.ConstellationTool
                     }
                 }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.FindAnyFont:476", __e); }
 
             // 2) 场景里任意 TMP
             try
@@ -632,7 +643,7 @@ namespace DiceVaders.ConstellationTool
             tmp.text = label;
             tmp.color = Color.white;     // 底图已是深色，白字可读
             tmp.alignment = TMPro.TextAlignmentOptions.Center;
-            try { tmp.enableAutoSizing = false; } catch { }
+            try { tmp.enableAutoSizing = false; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.CreateOwnButton:638", __e); }
 
             Log($"  已建按钮 '{label}'（font={(font != null ? font.name : "默认")} size={tmp.fontSize} 尺寸={rt.sizeDelta}）");
             return go;
@@ -690,7 +701,7 @@ namespace DiceVaders.ConstellationTool
                     {
                         if (t == null) continue;
                         t.text = label;
-                        try { t.ForceMeshUpdate(); } catch { }
+                        try { t.ForceMeshUpdate(); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.RetextButton:696", __e); }
                         n++;
                     }
                 if (n > 0)
@@ -724,10 +735,10 @@ namespace DiceVaders.ConstellationTool
                     if (t.text != want)
                     {
                         t.text = want;
-                        try { t.ForceMeshUpdate(); } catch { }
+                        try { t.ForceMeshUpdate(); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.EnforceButtonTexts:730", __e); }
                     }
                 }
-                catch { }
+                catch (Exception __e) { LogOnce.Warn("ConstellationUI.EnforceButtonTexts:733", __e); }
             }
         }
 
@@ -789,7 +800,7 @@ namespace DiceVaders.ConstellationTool
                     if (sp.texture == null) return true;
                 }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.HasBrokenSprites:795", __e); }
             return false;
         }
 
@@ -807,10 +818,10 @@ namespace DiceVaders.ConstellationTool
             {
                 if (_nativeButton != null)
                 {
-                    try { UnityEngine.Object.Destroy(_nativeButton); killed++; } catch { }
+                    try { UnityEngine.Object.Destroy(_nativeButton); killed++; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DestroyBuiltButtons:813", __e); }
                 }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.DestroyBuiltButtons:816", __e); }
             _nativeButton = null;
 
             for (int i = 0; i < _singleButtons.Count; i++)
@@ -818,7 +829,7 @@ namespace DiceVaders.ConstellationTool
                 var b = _singleButtons[i];
                 if (b != null)
                 {
-                    try { UnityEngine.Object.Destroy(b); killed++; } catch { }
+                    try { UnityEngine.Object.Destroy(b); killed++; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DestroyBuiltButtons:824", __e); }
                 }
             }
             _singleButtons.Clear();
@@ -847,6 +858,21 @@ namespace DiceVaders.ConstellationTool
                     else
                     {
                         _nativeButton.SetActive(true);
+
+                        // ★ v3.6 修复（审查 M15）：主按钮可以复用，但**小按钮可能还没成功建过**。
+                        //   首次构建时若 FindRevealButton() 返回 null，BuildSingleButtons 会直接跳过，
+                        //   而旧实现在这里无条件 return —— 此后每次打开星座界面都命中复用分支，
+                        //   单项刷新按钮**永远不会被创建**，用户只看到「少了三个按钮」，日志里只有一行「跳过」。
+                        if (Plugin.EnableSingleReroll.Value && _singleButtons.Count == 0)
+                        {
+                            var host2 = EnsureOverlayCanvas();
+                            var src2 = FindRevealButton();
+                            if (host2 != null && src2 != null)
+                            {
+                                Log("  检测到小按钮缺失，补建一次");
+                                BuildSingleButtons(src2, host2, _nativeButton);
+                            }
+                        }
                         return;
                     }
                 }
@@ -864,7 +890,7 @@ namespace DiceVaders.ConstellationTool
                 // 所以不再克隆，一律自建：原版九宫格底图 + 游戏字体。
                 if (Plugin.LogCandidates.Value)
                 {
-                    try { FindButtonSource(cc); } catch { }   // 只打印候选清单，不用结果
+                    try { FindButtonSource(cc); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.TryBuildNativeButton:870", __e); }   // 只打印候选清单，不用结果
                 }
 
                 float fontSize = 42f;
@@ -905,7 +931,7 @@ namespace DiceVaders.ConstellationTool
                     catch (Exception e)
                     {
                         Log("  克隆揭晓按钮失败，退回自建: " + e.Message);
-                        if (_nativeButton != null) { try { UnityEngine.Object.Destroy(_nativeButton); } catch { } }
+                        if (_nativeButton != null) { try { UnityEngine.Object.Destroy(_nativeButton); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.TryBuildNativeButton:911", __e); } }
                         _nativeButton = null;
                     }
                 }
@@ -943,7 +969,7 @@ namespace DiceVaders.ConstellationTool
             // 先清旧的：星座界面每次重新打开都会走到这里
             for (int i = 0; i < _singleButtons.Count; i++)
             {
-                try { if (_singleButtons[i] != null) UnityEngine.Object.Destroy(_singleButtons[i]); } catch { }
+                try { if (_singleButtons[i] != null) UnityEngine.Object.Destroy(_singleButtons[i]); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.BuildSingleButtons:949", __e); }
             }
             _singleButtons.Clear();
 
@@ -957,14 +983,39 @@ namespace DiceVaders.ConstellationTool
                 if (srt != null && srt.sizeDelta.x > 1f && srt.sizeDelta.y > 1f)
                 { baseW = srt.sizeDelta.x; baseH = srt.sizeDelta.y; }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.BuildSingleButtons:963", __e); }
 
             float kOne = Plugin.SingleBtnWidth.Value / baseW;
             float oneH = baseH * kOne;
             float kMain = Plugin.BtnWidth.Value / baseW;
             float mainH = baseH * kMain;
 
-            for (int i = 0; i < 3; i++)
+            // ★ v3.6（审查 L13）：按「未锁定的卡片数」动态决定建几个小按钮。
+            //   旧实现写死 3 —— 与克隆路径「保持原版长宽比」的做法不一致，
+            //   而且在已解锁槽位数不是 3 的局里会多建/少建。
+            int count = 3;
+            try
+            {
+                var cc = FindController();
+                var list = (cc != null) ? cc.Constellations : null;
+                if (list != null)
+                {
+                    int unlocked = 0;
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        var c = list[i];
+                        if (c == null) continue;
+                        bool locked = false;
+                        try { locked = c.isLocked; } catch (Exception __e) { LogOnce.Warn("BuildSingleButtons.isLocked", __e); }
+                        if (!locked) unlocked++;
+                    }
+                    if (unlocked > 0) count = unlocked;
+                }
+            }
+            catch (Exception __e) { LogOnce.Warn("BuildSingleButtons.槽位数", __e); }
+            Log($"  小按钮数量 = {count}（按未锁定卡片数）");
+
+            for (int i = 0; i < count; i++)
             {
                 try
                 {
@@ -1055,7 +1106,7 @@ namespace DiceVaders.ConstellationTool
                 var cg = go.GetComponent<CanvasGroup>();
                 if (cg != null) { cg.alpha = 1f; cg.blocksRaycasts = true; }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.ForceVisible:1061", __e); }
 
             try
             {
@@ -1129,7 +1180,7 @@ namespace DiceVaders.ConstellationTool
                 if (rt != null)
                     sb.AppendLine($"  RT anchorMin={rt.anchorMin} anchorMax={rt.anchorMax} pivot={rt.pivot} sizeDelta={rt.sizeDelta} pos={rt.anchoredPosition}");
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.DumpObject:1135", __e); }
             Log(sb.ToString());
         }
 
@@ -1139,7 +1190,7 @@ namespace DiceVaders.ConstellationTool
         {
             // 安全：只在星座界面显示中才响应点击（局内绝不响应）
             bool showing = false;
-            try { showing = ConstellationController.IsShowing; } catch { }
+            try { showing = ConstellationController.IsShowing; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.CheckButtonClick:1145", __e); }
             if (!showing) return;
 
             // 主按钮：刷新全部
@@ -1182,7 +1233,7 @@ namespace DiceVaders.ConstellationTool
                     var cvs = go.GetComponentInParent<Canvas>();
                     if (cvs != null && cvs.renderMode != RenderMode.ScreenSpaceOverlay) cam = cvs.worldCamera;
                 }
-                catch { }
+                catch (Exception __e) { LogOnce.Warn("ConstellationUI.HitTest:1188", __e); }
 
                 return RectTransformUtility.RectangleContainsScreenPoint(rt, pos, cam);
             }
@@ -1200,8 +1251,8 @@ namespace DiceVaders.ConstellationTool
             // v0.8 崩溃记录：CreateConstellations() 是往 EncounterModel.Constellations【追加】，
             // 局内调用会把本局数据堆坏，任务引擎直接崩（游戏提示"删除本局"）。
             bool showing = false, transitioning = false;
-            try { showing = ConstellationController.IsShowing; } catch { }
-            try { transitioning = cc.IsTransitioning; } catch { }
+            try { showing = ConstellationController.IsShowing; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoReroll:1206", __e); }
+            try { transitioning = cc.IsTransitioning; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoReroll:1207", __e); }
 
             if (!showing) { SetStatus("已拦截：当前不在星座界面"); Log("[安全] 拒绝重掷 —— IsShowing=false"); return; }
             if (transitioning) { SetStatus("已拦截：界面过渡中"); Log("[安全] 拒绝重掷 —— IsTransitioning=true"); return; }
@@ -1227,7 +1278,7 @@ namespace DiceVaders.ConstellationTool
                     if (ec != null && ec.EncounterModel != null && ec.EncounterModel.Constellations != null)
                         _modelSnapshot = ec.EncounterModel.Constellations.Count;
                 }
-                catch { }
+                catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoReroll:1233", __e); }
 
                 Log($"调用 CreateConstellations() ... (第 {_rerollCount} 次, 快照 {_modelSnapshot})");
                 var routine = cc.CreateConstellations();
@@ -1263,8 +1314,8 @@ namespace DiceVaders.ConstellationTool
 
             // ---- 与全部重掷一致的安全守卫 ----
             bool showing = false, transitioning = false;
-            try { showing = ConstellationController.IsShowing; } catch { }
-            try { transitioning = cc.IsTransitioning; } catch { }
+            try { showing = ConstellationController.IsShowing; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoRerollSingle:1269", __e); }
+            try { transitioning = cc.IsTransitioning; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoRerollSingle:1270", __e); }
             if (!showing) { SetStatus("已拦截：当前不在星座界面"); return; }
             if (transitioning) { SetStatus("已拦截：界面过渡中"); return; }
             if (Time.realtimeSinceStartup - _lastRerollAt < 0.45f) return;
@@ -1286,7 +1337,7 @@ namespace DiceVaders.ConstellationTool
                 var ui = cc.Constellations;
                 if (ui != null && index < ui.Count && ui[index] != null) locked = ui[index].isLocked;
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoRerollSingle:1292", __e); }
             if (locked) { SetStatus($"槽位 {index + 1} 已锁定，跳过"); return; }
 
             try
@@ -1320,7 +1371,7 @@ namespace DiceVaders.ConstellationTool
 
                 // 4) 只改数据：替换目标位
                 int oldId = -1;
-                try { oldId = cl[index].Number; } catch { }
+                try { oldId = cl[index].Number; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.DoRerollSingle:1326", __e); }
                 cl[index] = newId;
 
                 _lastRerollAt = Time.realtimeSinceStartup;
@@ -1408,12 +1459,12 @@ namespace DiceVaders.ConstellationTool
                                     var am0 = c.ArtifactModel;
                                     if (am0 != null) taken.Add((int)am0.ArtifactName);
                                 }
-                                catch { }
+                                catch (Exception __e) { LogOnce.Warn("ConstellationUI.BuildCandidatePool:1414", __e); }
                             }
                         }
                     }
                 }
-                catch { }
+                catch (Exception __e) { LogOnce.Warn("ConstellationUI.BuildCandidatePool:1419", __e); }
 
                 for (int i = 0; i < all.Count; i++)
                 {
@@ -1425,7 +1476,7 @@ namespace DiceVaders.ConstellationTool
                         if (taken.Contains((int)a.ArtifactName)) continue;
                         _candidatePool.Add(a);
                     }
-                    catch { }
+                    catch (Exception __e) { LogOnce.Warn("ConstellationUI.BuildCandidatePool:1431", __e); }
                 }
                 Log($"  候选池: 全部 {all.Count} / 界面已占 {taken.Count} / 可用 {_candidatePool.Count}");
             }
@@ -1462,7 +1513,7 @@ namespace DiceVaders.ConstellationTool
                     if (cv != null) { cam = cv.worldCamera; break; }
                 }
             }
-            catch { }
+            catch (Exception __e) { LogOnce.Warn("ConstellationUI.UpdateSingleButtonPositions:1468", __e); }
 
             for (int i = 0; i < _singleButtons.Count && i < ui.Count; i++)
             {
@@ -1482,7 +1533,7 @@ namespace DiceVaders.ConstellationTool
                     // 再往下 370 像素才到卡片底部附近（v3.0.1 首测截图标定）。
                     rt.anchoredPosition = new Vector2(screen.x, screen.y - 370f);
                 }
-                catch { }
+                catch (Exception __e) { LogOnce.Warn("ConstellationUI.UpdateSingleButtonPositions:1488", __e); }
             }
         }
 
@@ -1562,7 +1613,7 @@ namespace DiceVaders.ConstellationTool
                             var c = ui[i];
                             if (c == null) continue;
                             bool locked = false;
-                            try { locked = c.isLocked; } catch { }
+                            try { locked = c.isLocked; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.TrimModelConstellations:1568", __e); }
                             if (!locked) need++;
                         }
                     }
@@ -1624,7 +1675,7 @@ namespace DiceVaders.ConstellationTool
                 //   触发的 UpdateConstellationView 可能还没跑完 —— 日志实证 IsShowing 与
                 //   IsTransitioning 会同时为真。所以这里加过渡守卫，顺延到过渡结束再裁。
                 bool transitioning = false;
-                try { transitioning = cc.IsTransitioning; } catch { }
+                try { transitioning = cc.IsTransitioning; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.RestoreDetails:1630", __e); }
                 if (transitioning)
                 {
                     _trimAt = Time.realtimeSinceStartup + 1.0f;
@@ -1640,7 +1691,7 @@ namespace DiceVaders.ConstellationTool
                     var c = list[i];
                     if (c == null) { fail++; continue; }
                     ArtifactModel am = null;
-                    try { am = c.ArtifactModel; } catch { }
+                    try { am = c.ArtifactModel; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.RestoreDetails:1646", __e); }
                     if (am == null) { none++; continue; }
 
                     // 0) v1.1 修正：不再把 isRevealed 置 false。
@@ -1660,7 +1711,7 @@ namespace DiceVaders.ConstellationTool
                         {
                             sv.SetConstellation(am.ArtifactName);
                             sv.Build();
-                            try { sv.Play(); } catch { }
+                            try { sv.Play(); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.RestoreDetails:1666", __e); }
                             shape++;
                         }
                     }
@@ -1675,7 +1726,7 @@ namespace DiceVaders.ConstellationTool
                     catch (Exception e) { Log($"  补[{i}] 卡片失败: {e.GetType().Name}: {e.Message}"); }
 
                     // 4) Initialize / SetConstellationToArtifact 之后可能又被置回 true，再兜一次
-                    try { if (c.isRevealed) c.isRevealed = false; } catch { }
+                    try { if (c.isRevealed) c.isRevealed = false; } catch (Exception __e) { LogOnce.Warn("ConstellationUI.RestoreDetails:1681", __e); }
 
                     // 5) 自动揭晓（仅限已解锁星座）★ 详情卡片的真正装配入口
                     //    用户实测事实：游戏原版是"一次性生成"，重掷后详情卡片不再装配。
@@ -1729,7 +1780,7 @@ namespace DiceVaders.ConstellationTool
                             var c = list[i];
                             if (c == null) { sb.AppendLine($"    [{i}] null"); continue; }
                             string am = "null";
-                            try { if (c.ArtifactModel != null) am = c.ArtifactModel.ArtifactName.ToString(); } catch { }
+                            try { if (c.ArtifactModel != null) am = c.ArtifactModel.ArtifactName.ToString(); } catch (Exception __e) { LogOnce.Warn("ConstellationUI.Dump:1735", __e); }
                             sb.AppendLine($"    [{i}] '{Safe(() => c.name)}' locked={Safe(() => c.isLocked.ToString())} revealed={Safe(() => c.isRevealed.ToString())} Artifact={am}");
                         }
                 }

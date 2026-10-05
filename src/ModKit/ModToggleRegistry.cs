@@ -37,7 +37,7 @@ namespace DiceVaders.ModKit
         /// <summary>改变开关后同步一次日志。</summary>
         public static Action<string> Log;
 
-        private static void Say(string msg) { try { Log?.Invoke(msg); } catch { } }
+        private static void Say(string msg) { try { Log?.Invoke(msg); } catch (Exception __e) { LogOnce.Warn("ModToggleRegistry.Say:40", __e); } }
 
         // ── 三个开关的统一读写（供设置面板注入的行调用）──
 
