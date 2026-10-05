@@ -1,0 +1,23 @@
+# 构建产物
+bin/
+obj/
+*.pdb
+*.deps.json
+
+# 日志与临时文件
+*.log
+*.bak
+*.bak2
+*.tmp
+*.user
+*.suo
+.vs/
+
+# 打包产物
+dist/
+*.zip
+
+# 系统
+Thumbs.db
+desktop.ini
+.DS_Store

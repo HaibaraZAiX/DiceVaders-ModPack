@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>DiceVaders.NativeSandbox</AssemblyName>
+    <RootNamespace>DiceVaders.NativeSandbox</RootNamespace>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <NoWarn>$(NoWarn);CS0436;NU1701;MSB3277;CS0618</NoWarn>
+
+    <!-- 发布硬要求：禁止嵌入 PDB 路径，避免泄漏本机路径 -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildProjectDirectory)=/src</PathMap>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\DiceVaders</GameDir>
+    <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
+    <InteropDir>$(BepInExDir)\interop</InteropDir>
+    <CoreDir>$(BepInExDir)\core</CoreDir>
+    <ModKitDir>$(MSBuildThisFileDirectory)..\DiceVaders.ModKit\bin\Release</ModKitDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="DiceVaders.ModKit">
+      <HintPath>$(ModKitDir)\DiceVaders.ModKit.dll</HintPath><Private>true</Private>
+    </Reference>
+
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(CoreDir)\BepInEx.Core.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(CoreDir)\BepInEx.Unity.IL2CPP.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(CoreDir)\0Harmony.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(CoreDir)\Il2CppInterop.Runtime.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(CoreDir)\Il2CppInterop.Common.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(InteropDir)\Il2Cppmscorlib.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem">
+      <HintPath>$(InteropDir)\Il2CppSystem.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem.Core">
+      <HintPath>$(InteropDir)\Il2CppSystem.Core.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="ScriptAssembly">
+      <HintPath>$(InteropDir)\ScriptAssembly.dll</HintPath><Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(InteropDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(InteropDir)\UnityEngine.UI.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(InteropDir)\UnityEngine.UIModule.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(InteropDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(InteropDir)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(InteropDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.InputSystem">
+      <HintPath>$(InteropDir)\Unity.InputSystem.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(InteropDir)\UnityEngine.dll</HintPath><Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
+
