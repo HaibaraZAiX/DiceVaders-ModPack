@@ -165,21 +165,21 @@
     "BepInEx/plugins/DiceVaders.ShopInfo.dll": "8db8ca09118e0e5ba5e63da45f0bb006dc5394cd00f4bed178fbbdd23a657d0e"
   },
   "repository_source_sha256": {
-    "src/ConstellationTool/DiceVaders.ConstellationTool.csproj": "01827c88799f55b92690765df32bfaa621ae12618cb34ce67c32a681e5356545",
+    "src/ConstellationTool/DiceVaders.ConstellationTool.csproj": "dab0b202bac4eb7d36067ff851eb683d51e41c716462a1e56cf935a9ed08fd9c",
     "src/ConstellationTool/Plugin.cs": "ef7423af6b5853dacc8a571d12509cec6d9b474eee13a413b6694e600a385ccb",
-    "src/ExtraRewardOption/DiceVaders.ExtraRewardOption.csproj": "22eafdcf7051a0a6998cf8c39be6818444927c8e8719c1600f73acfff54edbd6",
+    "src/ExtraRewardOption/DiceVaders.ExtraRewardOption.csproj": "01db356d7fa97f1fa589418c701d8a429cf33c5fa61bdb9de1de77ce27fb2766",
     "src/ExtraRewardOption/Plugin.cs": "d4a8a6eb3248a79adef3526698546fefb78ec184483d83b7c2065daf1e421a6c",
-    "src/ModKit/DiceVaders.ModKit.csproj": "4ba0c252474c938ed236d21ec0554018fca36c4df8e3abacae8cc1c8f16a8c96",
+    "src/ModKit/DiceVaders.ModKit.csproj": "635cdc9f86c55aecbc7c880b8f0d4098059417276cd420c023d1420c13190edc",
     "src/ModKit/Il2CppHelpers.cs": "993fa7ac402cf5ebeeddb3df144838f7977d231a55ced8e8109e6b6edfa345e7",
     "src/ModKit/ModToggleRegistry.cs": "2e45b808e7f3506d6c5c58a08d7868ea19d0047f1edbec56eb8ab174f73f30da",
     "src/ModKit/UiInjector.cs": "e545a0e96e2b73d1204e1bf27825e4efe3330f77457caec8a047b7509b8af78c",
-    "src/NativeSandbox/DiceVaders.NativeSandbox.csproj": "244e3d4ae8cbb13007ff0c3ff709a977f6662f7436a2be7d215e8e6a4d14cb03",
+    "src/NativeSandbox/DiceVaders.NativeSandbox.csproj": "33b137976cebefe34f1bdb8faecadafd4638d4a4663c25fdd8dc7bb9d325bd6f",
     "src/NativeSandbox/Plugin.cs": "fdc8b849fad368a037096a01a63669aa89f4876e4e10940ef3261d1450308ba2",
-    "src/QoL/DiceVaders.QoL.csproj": "eba71831b01af94277e6373c95afddb02f5ff24b0f6bef3e3b0a4bd27efdf666",
+    "src/QoL/DiceVaders.QoL.csproj": "9c4e8fc286cf020c280998575d6376f512740f06aec146aef415714b43d5b9de",
     "src/QoL/Plugin.cs": "2344a44c208a7a7635252d9707593242b7f2d4c4d8ca0eab1cb69ab10b32b640",
-    "src/ResourceButtons/DiceVaders.ResourceButtons.csproj": "fdb61a3b6f0ba94bf731d641dd91b4d01c5826004f9b2decf10f58a00747034b",
+    "src/ResourceButtons/DiceVaders.ResourceButtons.csproj": "2dac186b6fdda6e2a77260786debd75c5e015e7596456bc7413db0c3c6ad7f90",
     "src/ResourceButtons/Plugin.cs": "c5a1899c274f57c36870736d9a7a1950d49cf720d13254b4ca90e2bff3f440ae",
-    "src/ShopInfo/DiceVaders.ShopInfo.csproj": "adf4ba38db6c21407d975817f0fec7b4f2b3a8d5e41e18a99026a83b13fed592",
+    "src/ShopInfo/DiceVaders.ShopInfo.csproj": "1c2dbe692b2552443d9698039870be8fb3070779f002990449739221b26b5ea3",
     "src/ShopInfo/Plugin.cs": "a91bbece3f17cbbf7745a599564e81cc928395c0f3585919d9c55678edce49bf"
   },
   "repository_source_hash_encoding": "UTF-8 without BOM, LF line endings"

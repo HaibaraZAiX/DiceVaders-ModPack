@@ -5,6 +5,11 @@
   "build_warnings": 0,
   "build_errors": 0,
   "regression_count": 139,
+  "repository_build_count": 7,
+  "repository_build_warnings": 0,
+  "repository_build_errors": 0,
+  "repository_build_matches_reviewed_dlls": true,
+  "include_source_revision_in_informational_version": false,
   "game_tested": false,
   "regressions": [
     {

@@ -15,6 +15,7 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <Deterministic>true</Deterministic>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <PathMap>$(MSBuildProjectDirectory)=/src</PathMap>
   </PropertyGroup>
 
