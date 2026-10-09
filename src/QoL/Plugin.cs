@@ -27,7 +27,7 @@ namespace DiceVaders.QoL
     ///   模块 3 商店品质   —— 提高商店里高稀有度商品的概率
     ///   模块 4 全解锁     —— 所有神器视为已解锁（对应「专属专长见不到」）
     /// </summary>
-    [BepInPlugin(Guid, "DiceVaders QoL", "1.1.0")]
+    [BepInPlugin(Guid, "DiceVaders QoL", "1.1.1")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicevaders.qol";
@@ -58,8 +58,8 @@ namespace DiceVaders.QoL
                 "提升高稀有度出现概率（改动 ContentGetter.GetChanceForRarity 的返回值）。");
             RarityChanceMul = Config.Bind("2-掉落品质", "RarityChanceMultiplier", 1.5f,
                 new ConfigDescription(
-                    "高稀有度【累积阈值】的倍率。1.0=原版；1.5=明显更容易出好东西；2.0=上限。\n" +
-                    "★ 再高没有意义：三个阈值会被一起夹到 1.0，稀有度区分度就没了。",
+                    "高稀有度【单档权重】的倍率。1.0=原版；1.5=明显更容易出好东西；2.0=上限。\n" +
+                    "★ 再高没有意义：各档权重按传奇、稀有、罕见顺序累加；超过 100% 的区间会被截断。",
                     new AcceptableValueRange<float>(1f, 2f)));
 
             // ═══════ 模块 3：商店品质 ═══════
@@ -77,7 +77,7 @@ namespace DiceVaders.QoL
             UnlockAllArtifacts = Config.Bind("4-解锁", "UnlockAllArtifacts", false,
                 "让所有神器都视为已解锁（对应「神器解锁不完 / 专属专长见不到」）。");
 
-            Logger.LogInfo("===== DiceVaders QoL v1.1.0 =====");
+            Logger.LogInfo("===== DiceVaders QoL v1.1.1 =====");
 
             // ═══════ 应用补丁 ═══════
             // ★ v1.1 修复（审查 M35）：改成**无条件挂载**，由补丁体自己检查 .Value。
@@ -92,7 +92,7 @@ namespace DiceVaders.QoL
             try { Harmony.PatchAll(typeof(Patch_GetChanceForRarity)); patched++; }
             catch (Exception e) { Logger.LogError("  [模块2] 补丁失败: " + e.GetType().Name + ": " + e.Message); }
 
-            try { Harmony.PatchAll(typeof(Patch_GetCurrentShopRarity)); patched++; }
+            try { Harmony.PatchAll(typeof(Patch_GetShopRarityValue)); patched++; }
             catch (Exception e) { Logger.LogError("  [模块3] 补丁失败: " + e.GetType().Name + ": " + e.Message); }
 
             try { Harmony.PatchAll(typeof(Patch_IsArtifactUnlocked)); patched++; }
@@ -110,22 +110,10 @@ namespace DiceVaders.QoL
     // ═══════════════════════════════════════════════════════
     // 模块 2：掉落品质
     //
-    // ContentGetter.GetChanceForRarity(Rarity, EncounterModel) —— RVA 0x1CFC450
+    // ContentGetter.GetChanceForRarity(Rarity, EncounterModel)
     //
-    // ★★ 重要：返回值是【累积阈值】，不是单档概率 ★★
-    //   伪代码：
-    //     f16 = w*0.001 - 0.03;  f15 = w*0.002 + 0.03;  f5 = w*0.015 + 0.1;
-    //     c1 = clamp01(f16);  c2 = clamp01(f16+f15);  c3 = clamp01(f16+f15+f5);
-    //   本函数按 rarity 返回 c1 / c2 / c3 之一，调用方做区间判定：
-    //     r < c1 → 传说 ; r < c2 → 稀有 ; r < c3 → 罕见 ; else → 普通
-    //   所以 P(传说)=c1、P(稀有)=c2-c1、P(罕见)=c3-c2、P(普通)=1-c3。
-    //
-    //   实测对照：w=635 → 60.5 / 39.5 / 0 / 0，与游戏内截图一致。
-    //
-    // ★ 为什么乘倍率安全：c1 ≤ c2 ≤ c3 恒成立，同乘一个 >1 的系数后再各自夹到 1.0，
-    //   大小关系仍然保持，因此不会出现 c2-c1 < 0 这种负概率。
-    //   仍然把倍率上限收到 2.0 —— 再高就没有区分度了（三档全被夹成 1.0）。
-    // ═══════════════════════════════════════════════════════
+    // 当前机器码：GetChanceForRarity 返回单档权重，GetRandomRarity 依序累加。
+    // 原版保证高 W 时仍给罕见与普通保底；倍率开启后可能消耗这些保底。
     [HarmonyPatch]
     internal static class Patch_GetChanceForRarity
     {
@@ -149,13 +137,13 @@ namespace DiceVaders.QoL
             try
             {
                 if (Plugin.BoostRarityChance == null || !Plugin.BoostRarityChance.Value) return;
-                // 只放大高稀有度阈值（2=罕见 / 3=稀有 / 4=传说）；
+                // 只放大高稀有度权重（2=罕见 / 3=稀有 / 4=传说）；
                 // 1=普通 是拿 1-c3 算出来的补数，不在本函数里返回，也不会被改到。
                 int r = (int)rarity;
                 if (r >= 2 && r <= 4)
                 {
                     __result *= Plugin.RarityChanceMul.Value;
-                    // 阈值本身就是 0~1 的归一化值，夹到 1.0 即可（大小关系见上文注释）
+                    // 单档权重夹到 0~1；调用方负责累加与截断
                     if (__result > 1f) __result = 1f;
                     if (__result < 0f) __result = 0f;
                 }
@@ -167,45 +155,38 @@ namespace DiceVaders.QoL
     // ═══════════════════════════════════════════════════════
     // 模块 3：商店品质
     //
-    // EncounterModel.GetCurrentShopRarity() —— RVA 0x1D31110
-    //   返回商店权重基数 w，公式：w = MIN((ActNumber-1)*5, 20) + GetIntValue(ShopRarity)
-    //   本模块在返值上加 Bonus。
-    //
-    // ★ 加成效果（代入已验证的累积阈值公式）：
-    //     w ≤ 30 时 c1 = clamp01(w*0.001 - 0.03) = 0 → 传说档恒为 0%
-    //     w  > 30 后 c1 开始为正 → 传说档才可能出现
-    //   所以「加 1 点」在早期几乎看不出效果，越到后期越明显 —— 这是设计如此，不是缺陷。
-    //   （审查报告怀疑 w>30 会触发一条崩溃路径，但按已验证的公式，w=31 只是
-    //     c1 = 0.001 这个正常的小概率，没有异常分支。）
-    // ═══════════════════════════════════════════════════════
+    // 当前 GetRandomShopEntity / GetChanceForRarity 直接读 GetIntValue(ShopRarity)。
+    // 在实际输入 getter 加一次 Bonus；不改保存值，不再同时修改聚合 W getter。
     [HarmonyPatch]
-    internal static class Patch_GetCurrentShopRarity
+    internal static class Patch_GetShopRarityValue
     {
         static System.Reflection.MethodBase TargetMethod()
         {
             var t = AccessTools.TypeByName("StarVaders.EncounterModel");
             if (t == null) { Plugin.Logger?.LogError("  [模块3] 找不到 StarVaders.EncounterModel"); return null; }
-            var m = AccessTools.Method(t, "GetCurrentShopRarity");
-            if (m == null) Plugin.Logger?.LogError("  [模块3] 找不到 EncounterModel.GetCurrentShopRarity");
+            var m = AccessTools.Method(t, "GetIntValue", new[] { typeof(EncounterValue) });
+            if (m == null) Plugin.Logger?.LogError("  [模块3] 找不到 EncounterModel.GetIntValue(ShopRarity)");
             return m;
         }
 
         [HarmonyPostfix]
-        static void Postfix(ref int __result)
+        static void Postfix(EncounterValue __0, ref int __result)
         {
             try
             {
                 if (Plugin.BoostShopRarity == null || !Plugin.BoostShopRarity.Value) return;
-                __result += Plugin.ShopRarityBonus.Value;
+                if (__0 != EncounterValue.ShopRarity) return;
+                long value = (long)__result + (Plugin.ShopRarityBonus?.Value ?? 0);
+                __result = (int)Math.Min(int.MaxValue, Math.Max(int.MinValue, value));
             }
-            catch (Exception __e) { LogOnce.Warn("Patch_GetCurrentShopRarity.Postfix", __e); }
+            catch (Exception __e) { LogOnce.Warn("Patch_GetShopRarityValue.Postfix", __e); }
         }
     }
 
     // ═══════════════════════════════════════════════════════
     // 模块 4：神器全解锁
     //
-    // ContentGetter.IsArtifactUnlocked(ArtifactName) —— RVA 0x1CFEF10
+    // ContentGetter.IsArtifactUnlocked(ArtifactName)
     //   拦法：Prefix 直接返回 true。
     // ═══════════════════════════════════════════════════════
     [HarmonyPatch]

@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>DiceVaders.ExtraRewardOption</AssemblyName>
     <RootNamespace>DiceVaders.ExtraRewardOption</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.4.3</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -23,7 +23,7 @@
     <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
     <InteropDir>$(BepInExDir)\interop</InteropDir>
     <CoreDir>$(BepInExDir)\core</CoreDir>
-    <ModKitDir>$(MSBuildThisFileDirectory)..\DiceVaders.ModKit\bin\Release</ModKitDir>
+    <ModKitDir>$(MSBuildThisFileDirectory)..\ModKit\bin\Release</ModKitDir>
   </PropertyGroup>
 
   <ItemGroup>

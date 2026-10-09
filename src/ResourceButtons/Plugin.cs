@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -29,7 +29,7 @@ namespace DiceVaders.ResourceButtons
     /// ★ 注入类的方法签名里不能出现托管类型（StringBuilder / List&lt;T&gt; / 委托），
     ///   会被 Il2CppInterop 拒绝注册。
     /// </summary>
-    [BepInPlugin(Guid, "DiceVaders Infinite Resources", "2.0.0")]
+    [BepInPlugin(Guid, "DiceVaders Infinite Resources", "2.0.1")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicevaders.resourcebuttons";
@@ -79,7 +79,7 @@ namespace DiceVaders.ResourceButtons
             LogOnRefill = Config.Bind("3-调试", "LogOnRefill", true,
                 "每次补回写一行日志。默认开 —— 出问题时读日志就能定位。");
 
-            Logger.LogInfo("===== DiceVaders InfiniteResources v2.0.0 =====");
+            Logger.LogInfo("===== DiceVaders InfiniteResources v2.0.1 =====");
 
             ModToggleRegistry.AutoResource = Enabled;
             ModToggleRegistry.AutoResourceChrono = GiveChrono;
@@ -169,7 +169,7 @@ namespace DiceVaders.ResourceButtons
             }
             catch (Exception e)
             {
-                Plugin.Logger?.LogInfo($"InfiniteResources {label} 失败: {e.GetType().Name}: {e.Message}");
+                LogOnce.Warn($"InfiniteResources.Keep.{key}", e);
                 return false;
             }
         }

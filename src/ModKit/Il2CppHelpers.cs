@@ -148,7 +148,7 @@ namespace DiceVaders.ModKit
 
         // ── 带时间缓存的 FindObjectOfType ──
         // FindObjectOfType 每次都会遍历整个场景；在 Update 里调用就是每秒几十上百次全场景扫描。
-        // 场景切换的感知延迟远小于一帧，所以 0.25 秒缓存完全够用。
+        // 命中默认最多缓存 0.5 秒；未命中缓存 0.25 秒，场景变化可能在该窗口后感知。
         private abstract class LookupCacheBase
         {
             public abstract void Invalidate();

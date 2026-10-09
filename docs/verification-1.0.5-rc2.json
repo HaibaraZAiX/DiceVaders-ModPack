@@ -1,0 +1,62 @@
+{
+  "version": "1.0.5-rc2",
+  "game_sha256": "642708f5567c58073a81aed8b4f84bc13c695841ea7d11800ac8b98386bf7509",
+  "build_count": 13,
+  "build_warnings": 0,
+  "build_errors": 0,
+  "regression_count": 139,
+  "game_tested": false,
+  "regressions": [
+    {
+      "suite": "regressions/F01_tests",
+      "passed": 20
+    },
+    {
+      "suite": "regressions/F02_F03_tests",
+      "passed": 13
+    },
+    {
+      "suite": "regressions/F04_F09_tests",
+      "passed": 18
+    },
+    {
+      "suite": "regressions/Constellation_lifecycle_tests",
+      "passed": 10
+    },
+    {
+      "suite": "regressions/F16_tests",
+      "passed": 12
+    },
+    {
+      "suite": "regressions/F21_tests",
+      "passed": 10
+    },
+    {
+      "suite": "regressions/Inactive_tests",
+      "passed": 14
+    },
+    {
+      "suite": "current",
+      "passed": 15
+    },
+    {
+      "suite": "reward_current",
+      "passed": 15
+    },
+    {
+      "suite": "rows_current",
+      "passed": 12
+    }
+  ],
+  "plugins_only_zip_sha256": "d12945f6a45ea393a232be0b618bc475768654db3bc24a84e74cba9818929d86",
+  "plugins": {
+    "DiceVaders.ModKit": "1.0.1",
+    "DiceVaders.ConstellationTool": "3.4.2",
+    "DiceVaders.ExtraRewardOption": "1.4.3",
+    "DiceVaders.NativeSandbox": "1.1.2",
+    "DiceVaders.QoL": "1.1.1",
+    "DiceVaders.ResourceButtons": "2.0.1",
+    "DiceVaders.ShopInfo": "1.0.2"
+  },
+  "test_scope": "Actual method bodies with controlled Unity/native boundary stubs; not in-game validation."
+}

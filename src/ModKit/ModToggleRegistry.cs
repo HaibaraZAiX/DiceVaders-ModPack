@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using BepInEx.Configuration;
 
 namespace DiceVaders.ModKit
@@ -33,6 +33,8 @@ namespace DiceVaders.ModKit
 
         /// <summary>开局额外专长（由 ExtraPerk 注册）。</summary>
         public static ConfigEntry<bool> ExtraPerk;
+        /// <summary>当前奖励插件的自动弹出；手动热键独立控制。</summary>
+        public static ConfigEntry<bool> ExtraRewardAutoOpen;
 
         /// <summary>改变开关后同步一次日志。</summary>
         public static Action<string> Log;
@@ -79,13 +81,14 @@ namespace DiceVaders.ModKit
 
         public static bool GetExtraPerk()
         {
-            return ExtraPerk != null && ExtraPerk.Value;
+            return ExtraRewardAutoOpen != null ? ExtraRewardAutoOpen.Value : ExtraPerk != null && ExtraPerk.Value;
         }
 
         public static void SetExtraPerk(bool v)
         {
-            if (ExtraPerk == null) { Say("ModToggles: 额外专长未注册"); return; }
-            ExtraPerk.Value = v;
+            var entry = ExtraRewardAutoOpen ?? ExtraPerk;
+            if (entry == null) { Say("ModToggles: 额外专长未注册"); return; }
+            entry.Value = v;
             Say($"ModToggles: 额外专长 -> {v}");
         }
     }

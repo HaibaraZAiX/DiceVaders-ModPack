@@ -1,0 +1,186 @@
+{
+  "version": "1.0.5-rc2",
+  "status": "review_candidate_not_game_tested",
+  "game_sha256": "642708f5567c58073a81aed8b4f84bc13c695841ea7d11800ac8b98386bf7509",
+  "plugins": [
+    {
+      "name": "DiceVaders.ModKit",
+      "version": "1.0.1",
+      "dll_sha256": "77cecf19f38347bdf1f628ce55a7f7e0be8d37c8fe503eb6cde22160f7d8af34",
+      "source_sha256": {
+        "DiceVaders.ModKit.csproj": "4cfae3274db3c2a678f12c0b9e6b4359858d19ddac0f84a2cb687dad8cb334e7",
+        "Il2CppHelpers.cs": "993fa7ac402cf5ebeeddb3df144838f7977d231a55ced8e8109e6b6edfa345e7",
+        "ModToggleRegistry.cs": "30922bf94d9b57bec40a3f48c2ec12c48867a8a20a2534dab1263adbd1f143b9",
+        "UiInjector.cs": "e545a0e96e2b73d1204e1bf27825e4efe3330f77457caec8a047b7509b8af78c"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.ModKit",
+        "version": "1.0.1.0",
+        "plugins": []
+      }
+    },
+    {
+      "name": "DiceVaders.ConstellationTool",
+      "version": "3.4.2",
+      "dll_sha256": "7809d862ebb883607c249b6c738ccf89a5c4d74f8e48cc5afbd598527e002a8d",
+      "source_sha256": {
+        "DiceVaders.ConstellationTool.csproj": "10d13aff0030ad04900548844687e8daabdaf199a73d02c543218cbfcc311963",
+        "Plugin.cs": "58ddf2a94283a497f54d6edc763507c153cba89fd6450802e7c62d1ac5c6219a"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.ConstellationTool",
+        "version": "3.4.2.0",
+        "plugins": [
+          {
+            "type": "DiceVaders.ConstellationTool.Plugin",
+            "guid": "dicevaders.constellationtool",
+            "name": "DiceVaders Constellation Tool",
+            "version": "3.4.2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DiceVaders.ExtraRewardOption",
+      "version": "1.4.3",
+      "dll_sha256": "732d9d43ce91380ca40c253730c2f640a18289d5d2ca0814dbb0554cafbc1c0a",
+      "source_sha256": {
+        "DiceVaders.ExtraRewardOption.csproj": "71fb26cadf879bf4a029ca18532cceb7b8be7e58d8ec506cd9899717a49b270d",
+        "Plugin.cs": "caa4fbab6c2e6cbd159226f6f5d2499f90725da39bb5451a96ec0e2dec000784",
+        "Plugin.cs.坏掉_173156": "00e2ecd2faf859631ca6a66e056d51d56f8587ef3048f1d3a4e8a7147569488e"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.ExtraRewardOption",
+        "version": "1.4.3.0",
+        "plugins": [
+          {
+            "type": "DiceVaders.ExtraRewardOption.Plugin",
+            "guid": "dicevaders.extrareward",
+            "name": "DiceVaders Extra Reward Option",
+            "version": "1.4.3"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DiceVaders.NativeSandbox",
+      "version": "1.1.2",
+      "dll_sha256": "436d6e7febfd5d645d73921a14f82c3d9eb1aaaa746a6060817f0723dfa33c72",
+      "source_sha256": {
+        "DiceVaders.NativeSandbox.csproj": "95d6b919e29a77a9d03a39c830908a6ae645ee1d18cd1ae95172ded4f3619f4d",
+        "Plugin.cs": "85ecc98a963faab7cb748fe40012cab62d535824e9b40628322674ede846537b"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.NativeSandbox",
+        "version": "1.1.2.0",
+        "plugins": [
+          {
+            "type": "DiceVaders.NativeSandbox.Plugin",
+            "guid": "dicevaders.nativesandbox",
+            "name": "DiceVaders Native Sandbox Rows",
+            "version": "1.1.2"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DiceVaders.QoL",
+      "version": "1.1.1",
+      "dll_sha256": "c5e1666ecfff5344c86a2dbbc6d71aef5ebc755d01a2ff87d6e8cfc2a9cae2e7",
+      "source_sha256": {
+        "DiceVaders.QoL.csproj": "588d7d6a058aff9c9b7cec7e8cf5229dd661c7195ccab993c6b403456edb0f33",
+        "Plugin.cs": "5ecc951e1e3ffe0d389efc22dfe5473fbd81e656e29cd7a2db2a8a87d63a0498"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.QoL",
+        "version": "1.1.1.0",
+        "plugins": [
+          {
+            "type": "DiceVaders.QoL.Plugin",
+            "guid": "dicevaders.qol",
+            "name": "DiceVaders QoL",
+            "version": "1.1.1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DiceVaders.ResourceButtons",
+      "version": "2.0.1",
+      "dll_sha256": "80b42714d2886204b64ff7323a5757dfe2ecb58155e56c48935023f5571c27fe",
+      "source_sha256": {
+        "DiceVaders.ResourceButtons.csproj": "b9936b3d7dd45e6a2cdcad8e181b155b08746adc0a9ac5bac39ee18dfc2f92b8",
+        "Plugin.cs": "a1da71c2b44c506e8375111063cfb321222e74c13ab5a92a094f80aa19c478d2"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.ResourceButtons",
+        "version": "2.0.1.0",
+        "plugins": [
+          {
+            "type": "DiceVaders.ResourceButtons.Plugin",
+            "guid": "dicevaders.resourcebuttons",
+            "name": "DiceVaders Infinite Resources",
+            "version": "2.0.1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DiceVaders.ShopInfo",
+      "version": "1.0.2",
+      "dll_sha256": "8db8ca09118e0e5ba5e63da45f0bb006dc5394cd00f4bed178fbbdd23a657d0e",
+      "source_sha256": {
+        "DiceVaders.ShopInfo.csproj": "9463d405294055a8e8babfed054344fb04c7877168fa8cffc1581026c3ded973",
+        "Plugin.cs": "e93648d424d342bf4fd2a6f8baf750665c228b118f9a2921e46febc48dc241a0"
+      },
+      "metadata": {
+        "assembly": "DiceVaders.ShopInfo",
+        "version": "1.0.2.0",
+        "plugins": [
+          {
+            "type": "DiceVaders.ShopInfo.Plugin",
+            "guid": "dicevaders.shopinfo",
+            "name": "DiceVaders ShopInfo",
+            "version": "1.0.2"
+          }
+        ]
+      }
+    }
+  ],
+  "package_kind": "plugins_only",
+  "files": {
+    "验收说明.md": "4b7f0862ce820cdab1edf5d06030b76db372b4a5cf3ecfd584f46967720cc983",
+    "BepInEx/config/dicevaders.constellationtool.cfg": "2b10793859ea69c6124d977f3d39aeb4ba8912c64493b3f9e45815a73a3a429d",
+    "BepInEx/config/dicevaders.extrareward.cfg": "d8e2c29eb62bfb7e75d4e450f718d620e4db69012f6a570871dd9837ce124ebb",
+    "BepInEx/config/dicevaders.nativesandbox.cfg": "973d8e2846a9e72f6f96adc5aff4090c29dcea41cc760a4cdd7b129f6dd4ce48",
+    "BepInEx/config/dicevaders.qol.cfg": "a375a20d2c6480a0dc34ea01906de7f0d31592a2d024007ec72d808ef21eae21",
+    "BepInEx/config/dicevaders.resourcebuttons.cfg": "baccb72b1cd73e600f30d95316ca4f0339d554e804e5f06e5b4c03d1737d17e5",
+    "BepInEx/config/dicevaders.shopinfo.cfg": "29b1f4654a02834409b8c54ace5f1e478584d1368f81e0194079f93a0c5bcddd",
+    "BepInEx/plugins/DiceVaders.ConstellationTool.dll": "7809d862ebb883607c249b6c738ccf89a5c4d74f8e48cc5afbd598527e002a8d",
+    "BepInEx/plugins/DiceVaders.ExtraRewardOption.dll": "732d9d43ce91380ca40c253730c2f640a18289d5d2ca0814dbb0554cafbc1c0a",
+    "BepInEx/plugins/DiceVaders.ModKit.dll": "77cecf19f38347bdf1f628ce55a7f7e0be8d37c8fe503eb6cde22160f7d8af34",
+    "BepInEx/plugins/DiceVaders.NativeSandbox.dll": "436d6e7febfd5d645d73921a14f82c3d9eb1aaaa746a6060817f0723dfa33c72",
+    "BepInEx/plugins/DiceVaders.QoL.dll": "c5e1666ecfff5344c86a2dbbc6d71aef5ebc755d01a2ff87d6e8cfc2a9cae2e7",
+    "BepInEx/plugins/DiceVaders.ResourceButtons.dll": "80b42714d2886204b64ff7323a5757dfe2ecb58155e56c48935023f5571c27fe",
+    "BepInEx/plugins/DiceVaders.ShopInfo.dll": "8db8ca09118e0e5ba5e63da45f0bb006dc5394cd00f4bed178fbbdd23a657d0e"
+  },
+  "repository_source_sha256": {
+    "src/ConstellationTool/DiceVaders.ConstellationTool.csproj": "01827c88799f55b92690765df32bfaa621ae12618cb34ce67c32a681e5356545",
+    "src/ConstellationTool/Plugin.cs": "ef7423af6b5853dacc8a571d12509cec6d9b474eee13a413b6694e600a385ccb",
+    "src/ExtraRewardOption/DiceVaders.ExtraRewardOption.csproj": "22eafdcf7051a0a6998cf8c39be6818444927c8e8719c1600f73acfff54edbd6",
+    "src/ExtraRewardOption/Plugin.cs": "d4a8a6eb3248a79adef3526698546fefb78ec184483d83b7c2065daf1e421a6c",
+    "src/ModKit/DiceVaders.ModKit.csproj": "4ba0c252474c938ed236d21ec0554018fca36c4df8e3abacae8cc1c8f16a8c96",
+    "src/ModKit/Il2CppHelpers.cs": "993fa7ac402cf5ebeeddb3df144838f7977d231a55ced8e8109e6b6edfa345e7",
+    "src/ModKit/ModToggleRegistry.cs": "2e45b808e7f3506d6c5c58a08d7868ea19d0047f1edbec56eb8ab174f73f30da",
+    "src/ModKit/UiInjector.cs": "e545a0e96e2b73d1204e1bf27825e4efe3330f77457caec8a047b7509b8af78c",
+    "src/NativeSandbox/DiceVaders.NativeSandbox.csproj": "244e3d4ae8cbb13007ff0c3ff709a977f6662f7436a2be7d215e8e6a4d14cb03",
+    "src/NativeSandbox/Plugin.cs": "fdc8b849fad368a037096a01a63669aa89f4876e4e10940ef3261d1450308ba2",
+    "src/QoL/DiceVaders.QoL.csproj": "eba71831b01af94277e6373c95afddb02f5ff24b0f6bef3e3b0a4bd27efdf666",
+    "src/QoL/Plugin.cs": "2344a44c208a7a7635252d9707593242b7f2d4c4d8ca0eab1cb69ab10b32b640",
+    "src/ResourceButtons/DiceVaders.ResourceButtons.csproj": "fdb61a3b6f0ba94bf731d641dd91b4d01c5826004f9b2decf10f58a00747034b",
+    "src/ResourceButtons/Plugin.cs": "c5a1899c274f57c36870736d9a7a1950d49cf720d13254b4ca90e2bff3f440ae",
+    "src/ShopInfo/DiceVaders.ShopInfo.csproj": "adf4ba38db6c21407d975817f0fec7b4f2b3a8d5e41e18a99026a83b13fed592",
+    "src/ShopInfo/Plugin.cs": "a91bbece3f17cbbf7745a599564e81cc928395c0f3585919d9c55678edce49bf"
+  },
+  "repository_source_hash_encoding": "UTF-8 without BOM, LF line endings"
+}

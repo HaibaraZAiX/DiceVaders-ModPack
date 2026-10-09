@@ -16,7 +16,7 @@ namespace DiceVaders.NativeSandbox
     ///
     /// ═══ 实证依据（全部来自 dump.cs + GameAssembly.dll 反汇编）═══
     ///
-    /// SettingsSceneController  (RVA 0x1C39BE0 Awake)
+    /// SettingsSceneController
     ///   0xE8 SkipAnimationsToggle        跳过侵略动画
     ///   0xF0 ShowCompletionStarsToggle   显示完成星标
     ///   0xF8 AssistModeToggle            辅助模式（每回合+1挪移和+1时空点）  ← 拿它当模板
@@ -33,7 +33,7 @@ namespace DiceVaders.NativeSandbox
     ///   挂到同一个父节点下。不接管原组件的回调 —— 改成每 0.15 秒读 isOn 同步到注册表，
     ///   避开 Il2CppInterop 的委托编组坑。
     /// </summary>
-    [BepInPlugin(Guid, "DiceVaders Native Sandbox Rows", "1.1.0")]
+    [BepInPlugin(Guid, "DiceVaders Native Sandbox Rows", "1.1.2")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicevaders.nativesandbox";
@@ -53,7 +53,7 @@ namespace DiceVaders.NativeSandbox
             Enabled = Config.Bind("1-开关", "Enabled", true,
                 "在游戏的「沙盒设置」面板里追加四行 mod 开关。");
 
-            Logger.LogInfo("===== DiceVaders NativeSandbox v1.1.0 =====");
+            Logger.LogInfo("===== DiceVaders NativeSandbox v1.1.2 =====");
 
             // ★ v1.1：类型注册与组件挂载拆成两个 try ——
             //   旧实现放在同一个 try 里，注册失败会连带跳过挂载，
@@ -99,10 +99,10 @@ namespace DiceVaders.NativeSandbox
         }
     }
 
-    /// <summary>把三行开关塞进沙盒面板。</summary>
+    /// <summary>把四行开关塞进沙盒面板。</summary>
     public static class SandboxRowInjector
     {
-        /// <summary>注入后的三行，供 ToggleWatcher 轮询。null = 还没注入 / 面板已销毁。</summary>
+        /// <summary>注入后的四行，供 ToggleWatcher 轮询。null = 还没注入 / 面板已销毁。</summary>
         public static StarVaders.OptionToggle RowConstellation;
         public static StarVaders.OptionToggle RowResource;
         public static StarVaders.OptionToggle RowProbability;
@@ -121,10 +121,12 @@ namespace DiceVaders.NativeSandbox
             "★ Mod：星座可刷新",
             "★ Mod：无限时空点/挪移",
             "★ Mod：显示稀有度概率",
-            "★ Mod：开局额外专长",
+            "★ Mod：开局自动专长（热键独立）",
         };
 
         private static bool _logged;
+        private static Transform _rowParent;
+        public static int RowEpoch { get; private set; }
 
         [HarmonyPatch(typeof(StarVaders.SettingsSceneController), nameof(StarVaders.SettingsSceneController.Awake))]
         [HarmonyPostfix]
@@ -157,6 +159,27 @@ namespace DiceVaders.NativeSandbox
             var parent = protoGo.transform.parent;
             if (parent == null) { Plugin.Logger?.LogInfo("NativeSandbox: 模板没有父节点"); return; }
 
+            if (_rowParent != parent)
+            {
+                ClearRows();
+                _rowParent = parent;
+            }
+            // 每次按当前面板重新绑定；静态引用不能代替父节点归属检查。
+            var oldConstellation = RowConstellation;
+            var oldResource = RowResource;
+            var oldProbability = RowProbability;
+            var oldExtraPerk = RowExtraPerk;
+            RowConstellation = FindRow(parent, 1);
+            RowResource = FindRow(parent, 2);
+            RowProbability = FindRow(parent, 3);
+            RowExtraPerk = FindRow(parent, 4);
+            if (oldConstellation != RowConstellation || oldResource != RowResource ||
+                oldProbability != RowProbability || oldExtraPerk != RowExtraPerk)
+            {
+                _ovConstellation = _ovResource = _ovProbability = _ovExtraPerk = null;
+                RowEpoch++;
+            }
+
             // ★ 防止重复注入：实测日志里「模板父节点 = VerticalLayoutGroup」出现了 4 次，
             //   说明 Awake 被调用多次 → 会注入多组行，多出来的行会和新行互相打架
             //   （表现为 ModToggles 的状态日志来回抖动）。
@@ -167,14 +190,14 @@ namespace DiceVaders.NativeSandbox
             bool allPresent = true;
             try
             {
-                allPresent = RowExists(parent, 1) && RowExists(parent, 2)
-                          && RowExists(parent, 3) && RowExists(parent, 4);
+                allPresent = RowConstellation != null && RowResource != null
+                          && RowProbability != null && RowExtraPerk != null;
                 if (allPresent)
                 {
                     Plugin.Logger?.LogInfo("NativeSandbox: 该面板四行已齐，跳过注入");
                     return;
                 }
-                if (RowExists(parent, 1) || RowExists(parent, 2) || RowExists(parent, 3) || RowExists(parent, 4))
+                if (RowConstellation != null || RowResource != null || RowProbability != null || RowExtraPerk != null)
                     Plugin.Logger?.LogWarning("NativeSandbox: 检测到上次只注入了一部分，本次补齐缺失的行");
             }
             catch (Exception __e) { LogOnce.Warn("SandboxRowInjector.重复检测", __e); }
@@ -190,6 +213,7 @@ namespace DiceVaders.NativeSandbox
                 RowProbability = CloneRow(protoGo, parent, 3, RowLabels[2], ModToggleRegistry.GetProbabilityDisplay());
             if (RowExtraPerk == null || RowExtraPerk.gameObject == null)
                 RowExtraPerk = CloneRow(protoGo, parent, 4, RowLabels[3], ModToggleRegistry.GetExtraPerk());
+            RowEpoch++;
 
             // ★ v1.1（审查 M22）：诊断信息**成功只报一次、失败每次都报** ——
             //   旧实现是首次注入后 _logged 永久为 true，面板重建时（唯一能定位
@@ -222,16 +246,25 @@ namespace DiceVaders.NativeSandbox
         }
 
         /// <summary>父节点下有没有名字正好是 DV_ModRow_{index} 的子对象。</summary>
-        private static bool RowExists(Transform parent, int index)
+        private static StarVaders.OptionToggle FindRow(Transform parent, int index)
         {
             string want = "DV_ModRow_" + index;
             int n = parent.childCount;
             for (int i = 0; i < n; i++)
             {
                 var ch = parent.GetChild(i);
-                if (ch != null && ch.name == want) return true;
+                if (ch != null && ch.name == want)
+                {
+                    var row = ch.GetComponent<StarVaders.OptionToggle>();
+                    if (row != null && row.Toggle != null) return row;
+                    // 上次留下的半成品先隐藏并改名，避免同名垃圾阻挡本次补齐。
+                    ch.gameObject.SetActive(false);
+                    ch.name = want + "_invalid";
+                    UnityEngine.Object.Destroy(ch.gameObject);
+                    return null;
+                }
             }
-            return false;
+            return null;
         }
 
         /// <summary>把一行的组件情况写进日志，便于定位「文字改不上」这类问题。</summary>
@@ -283,6 +316,9 @@ namespace DiceVaders.NativeSandbox
         ///   语义不成立，只靠 Unity 的 == 重载兜住。</summary>
         public static void ClearRows()
         {
+            _rowParent = null;
+            _logged = false;
+            RowEpoch++;
             RowConstellation = null;
             RowResource = null;
             RowProbability = null;
@@ -297,9 +333,10 @@ namespace DiceVaders.NativeSandbox
         private static StarVaders.OptionToggle CloneRow(GameObject protoGo, Transform parent, int index,
             string label, bool initial)
         {
+            GameObject clone = null;
             try
             {
-                var clone = UnityEngine.Object.Instantiate(protoGo, parent);
+                clone = UnityEngine.Object.Instantiate(protoGo, parent);
                 if (clone == null) return null;
                 clone.name = "DV_ModRow_" + index;
                 clone.SetActive(true);
@@ -317,28 +354,23 @@ namespace DiceVaders.NativeSandbox
                 var ov = clone.GetComponent<StarVaders.OptionView>();
                 if (ov != null && ov.Description != null) ov.Description.text = label;
 
-                // 开关：设为初始值。
-                // ★ v1.1 修复（审查 M23）：Instantiate 会连 Inspector 里序列化的**持久监听器**
-                //   一起复制过来 —— 也就是模板行（辅助模式）自己的回调。旧实现只调了
-                //   SetIsOnWithoutNotify，没有摘掉这些监听器，注释里说的
-                //   「不接管原组件回调」在代码里并没有保证。这里先清空再设值。
+                // 初始值与事件隔离必须全部成功，失败克隆不进入轮询。
                 var ot = clone.GetComponent<StarVaders.OptionToggle>();
-                if (ot != null && ot.Toggle != null)
-                {
-                    try { ot.Toggle.onValueChanged.RemoveAllListeners(); }
-                    catch (Exception __e) { LogOnce.Warn("CloneRow.RemoveAllListeners", __e); }
-                    try { ot.Toggle.SetIsOnWithoutNotify(initial); }
-                    catch (Exception __e)
-                    {
-                        LogOnce.Warn("CloneRow.SetIsOnWithoutNotify", __e);
-                        ot.Toggle.isOn = initial;
-                    }
-                }
+                if (ot == null || ot.Toggle == null) throw new InvalidOperationException("克隆行缺少开关");
+                // RemoveAllListeners 只清运行时监听器；新事件才隔离 Inspector 持久回调。
+                ot.Toggle.onValueChanged = new Toggle.ToggleEvent();
+                ot.Toggle.SetIsOnWithoutNotify(initial);
 
                 return ot;
             }
             catch (Exception e)
             {
+                if (clone != null)
+                {
+                    clone.SetActive(false);
+                    clone.name += "_invalid";
+                    UnityEngine.Object.Destroy(clone);
+                }
                 Plugin.Logger?.LogInfo($"NativeSandbox CloneRow({label}) 失败: {e.GetType().Name}: {e.Message}");
                 return null;
             }
@@ -346,17 +378,18 @@ namespace DiceVaders.NativeSandbox
     }
 
     /// <summary>
-    /// 每帧读三行的开关状态，同步进注册表 —— 功能插件据此开/关。
+    /// 定时读四行的开关状态，同步进注册表 —— 功能插件据此开/关。
     ///
     /// 为什么不用 Toggle.onValueChanged 回调：
     ///   Il2CppInterop 的 UnityAction&lt;bool&gt; 委托编组有坑（托管委托 → il2cpp 委托），
-    ///   轮询更稳且代价可忽略（三个 bool 比较）。
+    ///   轮询更稳且代价可忽略（四个 bool 比较）。
     /// </summary>
     public class ToggleWatcher : MonoBehaviour
     {
         public ToggleWatcher(IntPtr ptr) : base(ptr) { }
 
         private float _t;
+        private int _rowEpoch = -1;
 
         // ★ v1.1（审查 M21）：记录上一次读到并已同步过的值。
         //   旧实现用「on != 注册表当前值」判是否需要 Set —— 当那一项**没被任何插件注册**时
@@ -370,6 +403,12 @@ namespace DiceVaders.NativeSandbox
             _t += Time.unscaledDeltaTime;
             if (_t < 0.15f) return;   // 没必要每帧查
             _t = 0f;
+
+            if (_rowEpoch != SandboxRowInjector.RowEpoch)
+            {
+                _rowEpoch = SandboxRowInjector.RowEpoch;
+                _seen1 = _seen2 = _seen3 = _seen4 = false;
+            }
 
             // ★ 先重写文字 —— 游戏在 Awake 之后会再刷一遍本地化，把注入时写的标签覆盖掉。
             //   实测：第一版只写一次，面板上四行全显示模板原文「辅助模式（每回合+1挪移和+1时空点）」。

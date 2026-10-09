@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>DiceVaders.QoL</AssemblyName>
     <RootNamespace>DiceVaders.QoL</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.1</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -24,7 +24,7 @@
     <InteropDir>$(BepInExDir)\interop</InteropDir>
     <CoreDir>$(BepInExDir)\core</CoreDir>
     <!-- 共享库：日志出口 + LogOnce 去重日志（v1.1 起 QoL 也接进 ModKit 统一日志） -->
-    <ModKitDir>$(MSBuildThisFileDirectory)..\DiceVaders.ModKit\bin\Release</ModKitDir>
+    <ModKitDir>$(MSBuildThisFileDirectory)..\ModKit\bin\Release</ModKitDir>
   </PropertyGroup>
 
   <ItemGroup>

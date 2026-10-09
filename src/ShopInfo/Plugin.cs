@@ -10,33 +10,12 @@ using UnityEngine;
 namespace DiceVaders.ShopInfo
 {
     /// <summary>
-    /// 商店出货概率实时面板。
-    ///
-    /// 为什么做这个：游戏里「商店稀有度」只是一个数字，玩家看不出它到底意味着什么。
-    /// 实测（Ghidra 伪代码 + 从 GameAssembly.dll 读出的浮点常量）证明它确实在驱动
-    /// 各档位物品的出现概率，只是游戏没把它换算出来给玩家看。
-    ///
-    /// ═══ 概率公式（全部实证，非推测）═══
-    ///
-    /// EncounterModel.GetCurrentShopRarity()  (RVA 0x1D31110)：
-    ///     w = MIN((ActNumber - 1) * 5, 20) + GetIntValue(ShopRarity)
-    ///                                        ↑ EncounterValue 18      ↑ EncounterValue 11
-    ///   这个 w 就是「权重基数」。
-    ///
-    /// ContentGetter.GetRandomShopEntity()  (RVA 0x1CFC7F0)：
-    ///     fLegendary = w * 0.001 - 0.03      ← 常量取自 VA 0x183A24B2C / 0x183A24BA0
-    ///     fRare      = w * 0.002 + 0.03      ← VA 0x183A24B30 / 0x183A24BA0
-    ///     fUncommon  = w * 0.015 + 0.1       ← VA 0x183A24B6C / 0x183A24C00
-    ///     r = Random.NextDouble();
-    ///     r < fLegendary                  → 传说
-    ///     r < fLegendary + fRare          → 稀有
-    ///     r < fLegendary + fRare + fUncommon → 罕见
-    ///     else                            → 普通
-    ///
-    /// ContentGetter.GetChanceForRarity()  (RVA 0x1CFC450) —— 神器用同一组曲线，
-    /// 但「普通」档是补数：0.91 - (其余三档之和)，上限常量取自 VA 0x183A24E00 = 0.91。
+    /// 展示商品棋子与神器的稀有度概率。
+    /// 商品棋子按原生累积阈值计算；神器读取当前原生单档权重，包含 QoL 修改。
+    /// 星界另列，不计入四档概率之和；教程中不出现。
+    /// 现行原生核查与版本绑定见审查报告，不在源码保留旧构建地址。
     /// </summary>
-    [BepInPlugin(Guid, "DiceVaders ShopInfo", "1.0.0")]
+    [BepInPlugin(Guid, "DiceVaders ShopInfo", "1.0.2")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicevaders.shopinfo";
@@ -49,7 +28,7 @@ namespace DiceVaders.ShopInfo
         internal static ConfigEntry<float> OffsetY;
         internal static ConfigEntry<float> FontSize;
         internal static ConfigEntry<bool> ShowArtifactProbs;
-        internal static ConfigEntry<bool> ShowPoolSummary;
+
         internal static ConfigEntry<bool> ShowHiddenValues;
         internal static ConfigEntry<bool> ShowAstral;
         internal static ConfigEntry<float> ExtraOffsetY;
@@ -73,10 +52,8 @@ namespace DiceVaders.ShopInfo
             FontSize = Config.Bind("1-显示", "FontSize", 15f,
                 new ConfigDescription("字号。", new AcceptableValueRange<float>(8f, 40f)));
             ShowArtifactProbs = Config.Bind("1-显示", "ShowArtifactProbs", true,
-                "在右侧显示神器物品的稀有度概率（与左侧商品棋子共用同一套曲线）。\n" +
+                "在右侧显示神器物品的稀有度概率（使用游戏真实神器权重，跟随 QoL 加成）。\n" +
                 "★ 关掉只影响「神器物品」这一块；下面的「星界」行是独立开关，仍会显示。");
-            ShowPoolSummary = Config.Bind("1-显示", "ShowPoolSummary", false,
-                "【未实现 · 保留项】本局神器池统计。当前代码没有消费这个开关，改它不会有任何效果。");
 
             // ── 隐藏数值：游戏从不在界面上显示、但实际影响战斗的那些 EncounterValue ══
             // 对应差评里骂的 BOSS 机制（兽化 / 怒气 / 蜂群倍率 / 血祭 等）。
@@ -99,7 +76,7 @@ namespace DiceVaders.ShopInfo
             ModToggleRegistry.ProbabilityDisplay = ShowPanel;
             ModToggleRegistry.Log = m => Logger.LogInfo(m);
 
-            Logger.LogInfo("===== DiceVaders ShopInfo v1.0.0 =====");
+            Logger.LogInfo("===== DiceVaders ShopInfo v1.0.2 =====");
 
             ClassInjector.RegisterTypeInIl2Cpp<InfoPanel>();
             var go = new GameObject("DiceVaders_ShopInfo");
@@ -114,11 +91,11 @@ namespace DiceVaders.ShopInfo
         public InfoPanel(IntPtr ptr) : base(ptr) { }
 
         // ═══ 概率常量（从 GameAssembly.dll 实测读出）═══
-        private const float K_LEGENDARY = 0.001f;   // VA 0x183A24B2C
-        private const float K_RARE = 0.002f;        // VA 0x183A24B30
-        private const float K_UNCOMMON = 0.015f;    // VA 0x183A24B6C
-        private const float C_A = 0.03f;            // VA 0x183A24BA0
-        private const float C_B = 0.1f;             // VA 0x183A24C00
+        private const float K_LEGENDARY = 0.001f;
+        private const float K_RARE = 0.002f;
+        private const float K_UNCOMMON = 0.015f;
+        private const float C_A = 0.03f;
+        private const float C_B = 0.1f;
 
         /// <summary>
         /// 星界（Astral）出现概率 —— 独立于上面四档的一次掷骰。
@@ -291,7 +268,17 @@ namespace DiceVaders.ShopInfo
             // ★ v1.1 修复（审查 L7）：内容没变就别重建富文本。
             //   SetText 内部虽然会拦掉真正相同的字符串，但富文本拼接本身每 0.2 秒
             //   都在分配字符串。隐藏数值块打开时它的内容可能随时变，所以那种情况不跳过。
-            string sig = $"{w}|{showArtifact}|{showAstral}|{showHidden}|{constellationShowing}";
+            float aLeg, aRare, aUnc;
+            try
+            {
+                aLeg = Clamp01(StarVaders.ContentGetter.GetChanceForRarity((StarVaders.Rarity)4, em));
+                float t2 = Clamp01(aLeg + StarVaders.ContentGetter.GetChanceForRarity((StarVaders.Rarity)3, em));
+                float t3 = Clamp01(t2 + StarVaders.ContentGetter.GetChanceForRarity((StarVaders.Rarity)2, em));
+                aRare = t2 - aLeg; aUnc = t3 - t2;
+            }
+            catch (Exception e) { LogOnce.Warn("ShopInfo.ArtifactWeights", e); ClearAll(); return; }
+            float astral = em.CurrentDifficulty == StarVaders.DifficultyName.Tutorial ? 0f : ASTRAL_CHANCE;
+            string sig = $"{aLeg:R}|{aRare:R}|{aUnc:R}|{astral:R}|{w}|{showArtifact}|{showAstral}|{showHidden}|{constellationShowing}";
             if (sig == _lastSig && !showHidden) return;
             _lastSig = sig;
 
@@ -318,27 +305,27 @@ namespace DiceVaders.ShopInfo
             float pUnc = c3 - c2;
             float pCom = 1f - c3;   // ★ 已验证：W=635 → 60.5/39.5/0/0，与游戏内实测一致
 
-            // 概率四行（左右共用同一套曲线与配色 —— 配色取自 ContentGetter.GetRarityHex）
-            string Rows() =>
-                $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
-                $"<color=#CA47BA>稀有</color> {pRare * 100f:0.0}%\n" +
-                $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
-                $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%";
+            // 概率四行（两列各自计算，共用配色 —— 配色取自 ContentGetter.GetRarityHex）
+            string Rows(float leg, float rare, float unc, float com) =>
+                $"<color=#E58D07>传说</color> {leg * 100f:0.0}%\n" +
+                $"<color=#CA47BA>稀有</color> {rare * 100f:0.0}%\n" +
+                $"<color=#1ACB68>罕见</color> {unc * 100f:0.0}%\n" +
+                $"<color=#767D5A>普通</color> {com * 100f:0.0}%";
 
             // 星界：独立掷骰，不占上面四档之和
             string astralLine = showAstral
-                ? $"\n<color=#C01E20>星界</color> {ASTRAL_CHANCE * 100f:0.0}%"
+                ? $"\n<color=#C01E20>星界</color> {astral * 100f:0.0}%"
                 : "";
 
             // ── 左：商品棋子 ──
-            string leftText = "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" + Rows() + astralLine;
+            string leftText = "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" + Rows(pLeg, pRare, pUnc, pCom) + astralLine;
 
             // ── 右：神器物品 ──
             // ★ v1.1 修复（审查 M9）：关掉 ShowArtifactProbs 时**不再把整列抹空** ——
             //   旧实现连带把星界行也一起抹掉了，而星界是独立开关控制的。
             string rightText;
             if (showArtifact)
-                rightText = "<size=85%><color=#9FB4C7>神器物品</color></size>\n" + Rows() + astralLine;
+                rightText = "<size=85%><color=#9FB4C7>神器物品</color></size>\n" + Rows(aLeg, aRare, aUnc, Math.Max(0f, 1f - aLeg - aRare - aUnc)) + astralLine;
             else
                 rightText = astralLine.TrimStart('\n');
 
@@ -351,6 +338,7 @@ namespace DiceVaders.ShopInfo
 
         private void ClearAll()
         {
+            _lastSig = null;
             SetText(_textLeft, "");
             SetText(_textRight, "");
             SetText(_textExtra, "");
@@ -360,7 +348,7 @@ namespace DiceVaders.ShopInfo
         /// 隐藏数值 —— 游戏界面从不显示、但实际参与战斗计算的那些 EncounterValue。
         ///
         /// 对应差评里被骂得最凶的 BOSS 机制（兽化 / 怒气 / 蜂群倍率 / 血祭）。
-        /// 数据来源：EncounterModel.GetIntValue(EncounterValue)  RVA 0x1D2FA40
+        /// 数据来源：EncounterModel.GetIntValue(EncounterValue)。
         ///
         /// ★ 只在数值非零时才拼进字符串 —— 平时这一块完全空白，不占视觉空间。
         /// ★ 方法只接 IL2CPP 类型（EncounterModel），返回 string，避免 Il2CppInterop 拒注册。
@@ -405,8 +393,7 @@ namespace DiceVaders.ShopInfo
         }
 
 
-        // ★ 用两个无参/单 string 参数的小方法分别写左右文本：
-        //   把 TextMeshProUGUI 当参数传同样有被 Il2CppInterop 拒注册的风险。
+        // 相同文本不重复写入 TMP。
         private void SetText(TMPro.TextMeshProUGUI t, string s)
         {
             try

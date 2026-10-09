@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>DiceVaders.ConstellationTool</AssemblyName>
     <RootNamespace>DiceVaders.ConstellationTool</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>3.4.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -20,10 +20,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\DiceVaders</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\DiceVaders</GameDir>
     <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
     <InteropDir>$(BepInExDir)\interop</InteropDir>
-    <ModKitDir>$(MSBuildThisFileDirectory)..\DiceVaders.ModKit\bin\Release</ModKitDir>
+    <ModKitDir>$(MSBuildThisFileDirectory)..\ModKit\bin\Release</ModKitDir>
     <CoreDir>$(BepInExDir)\core</CoreDir>
   </PropertyGroup>
 

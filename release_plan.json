@@ -1,0 +1,14 @@
+{
+  "version": "1.0.5-rc2",
+  "status": "review_candidate_not_game_tested",
+  "game_sha256": "642708f5567c58073a81aed8b4f84bc13c695841ea7d11800ac8b98386bf7509",
+  "plugins": {
+    "DiceVaders.ModKit": "1.0.1",
+    "DiceVaders.ConstellationTool": "3.4.2",
+    "DiceVaders.ExtraRewardOption": "1.4.3",
+    "DiceVaders.NativeSandbox": "1.1.2",
+    "DiceVaders.QoL": "1.1.1",
+    "DiceVaders.ResourceButtons": "2.0.1",
+    "DiceVaders.ShopInfo": "1.0.2"
+  }
+}
